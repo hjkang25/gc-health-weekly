@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"C:/Users/GCC/Desktop/Health_Dashboard_cl/gc-health-weekly\" && npm install 2>&1)",
+      "Bash(cd \"C:/Users/GCC/Desktop/Health_Dashboard_cl/gc-health-weekly\" && npm show next version 2>&1)",
+      "Bash(cd \"C:/Users/GCC/Desktop/Health_Dashboard_cl/gc-health-weekly\" && npm run build 2>&1)",
+      "Bash(cd \"C:/Users/GCC/Desktop/Health_Dashboard_cl/gc-health-weekly\" && npm run dev 2>&1)",
+      "Bash(vercel:*)",
+      "Bash(cd \"C:/Users/GCC/Desktop/Health_Dashboard_cl/gc-health-weekly\" && npm install -g vercel 2>&1)"
+    ]
+  }
+}
