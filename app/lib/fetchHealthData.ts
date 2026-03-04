@@ -44,7 +44,7 @@ function parseCSV(text: string): Record<string, string>[] {
 async function listDataFiles(repo: string): Promise<Array<{ name: string; download_url: string }>> {
   const res = await fetch(
     `https://api.github.com/repos/hjkang25/${repo}/contents/data`,
-    { next: { revalidate: 3600 } }
+    { next: { tags: ['health-data'], revalidate: 86400 } }
   );
   if (!res.ok) return [];
   return res.json();
@@ -58,7 +58,7 @@ async function fetchCSV(repo: string, prefix: string, skip = 0): Promise<string>
     .sort((a, b) => b.name.localeCompare(a.name));
   const target = sorted[skip];
   if (!target) return '';
-  const res = await fetch(target.download_url, { next: { revalidate: 3600 } });
+  const res = await fetch(target.download_url, { next: { tags: ['health-data'], revalidate: 86400 } });
   return res.text();
 }
 
