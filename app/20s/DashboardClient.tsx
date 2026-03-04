@@ -20,7 +20,7 @@ const SUBJECTS = [
   { id: 'exercise', icon: '💪', name: '운동',        score: 88, grade: 'B+', comment: '헬스·운동 관심 1위. 이번 주 가장 잘하는 과목.' },
 ];
 
-const AI_COMMENT_FALLBACK = '이번 주 20대 검색 1위는 피부 트러블이에요. 다이어트·운동 관심은 높은데 수면 점수가 바닥이에요. 갓생을 살고 싶은데 몸이 안 따라오는 거예요.';
+const AI_COMMENT = '이번 주 20대 검색 1위는 피부 트러블이에요. 다이어트·운동 관심은 높은데 수면 점수가 바닥이에요. 갓생을 살고 싶은데 몸이 안 따라오는 거예요.';
 const EXPERT_COMMENT = '수면 부족이 피부 트러블과 우울감을 동시에 악화시킵니다. 이번 주 20대 데이터에서 세 지표가 동시에 상위권에 진입한 것은 생활 리듬 붕괴의 전형적인 신호입니다.';
 
 const TREND_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -50,29 +50,11 @@ export default function DashboardClient({ data }: { data: PageData }) {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [expanded, setExpanded] = useState<string | null>(null);
   const [scoreOpen, setScoreOpen] = useState(false);
-  const [aiComment, setAiComment] = useState(AI_COMMENT_FALLBACK);
-  const [commentLoading, setCommentLoading] = useState(true);
-
   useEffect(() => {
     const l = document.createElement('link');
     l.rel = 'stylesheet'; l.href = FONT_LINK;
     document.head.appendChild(l);
     return () => { document.head.removeChild(l); };
-  }, []);
-
-  useEffect(() => {
-    const kws = data.keywords.map(k => k.kw);
-    if (!kws.length) { setCommentLoading(false); return; }
-    fetch('/api/generate-comment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ keywords: kws, target: '20s' }),
-    })
-      .then(r => r.json())
-      .then(d => { if (d.comment) setAiComment(d.comment); })
-      .catch(() => {})
-      .finally(() => setCommentLoading(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const toggle = (kw: string) => setChecked(p => ({ ...p, [kw]: !p[kw] }));
@@ -107,10 +89,7 @@ export default function DashboardClient({ data }: { data: PageData }) {
         </div>
         <div style={{ background: 'rgba(0,0,0,0.2)', padding: '16px 28px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
           <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: '#5b21b6', background: '#fff', borderRadius: 3, padding: '3px 7px', flexShrink: 0, marginTop: 2 }}>EDITOR</span>
-          <p style={{ fontFamily: SANS, fontSize: 14, color: '#ffffff', lineHeight: 1.85, margin: 0, opacity: commentLoading ? 0.5 : 1, transition: 'opacity 0.4s' }}>
-            {aiComment}
-            {commentLoading && <span style={{ fontFamily: MONO, fontSize: 9, color: 'rgba(255,255,255,0.5)', marginLeft: 8 }}>AI 생성 중...</span>}
-          </p>
+          <p style={{ fontFamily: SANS, fontSize: 14, color: '#ffffff', lineHeight: 1.85, margin: 0 }}>{AI_COMMENT}</p>
         </div>
       </header>
 
