@@ -117,6 +117,15 @@ export default function Page() {
           ))}
         </div>
 
+        <div style={{ background: '#f0f7f3', borderLeft: '4px solid #007A33', padding: '16px 20px', marginBottom: 24 }}>
+          <div style={{ fontFamily: MONO, fontSize: 9, color: '#007A33', letterSpacing: 2, marginBottom: 8 }}>
+            GC 지씨케어 전문 의료진 코멘트
+          </div>
+          <p style={{ fontFamily: SANS, fontSize: 14, color: '#111a13', lineHeight: 1.85, margin: 0 }}>
+            수면 시간 1.2시간 감소와 공황장애 검색량 급등은 밀접한 상관관계가 있습니다. 신학기·분기 초 업무 부담이 겹치는 3월 초, 직장인들의 심리적 소진(Burn-out)이 데이터로 증명된 셈입니다.
+          </p>
+        </div>
+
         <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 2, marginBottom: 2 }}>
           <div style={{ background: C.surface, padding: '24px' }}>
             <SectionTitle label="이번 주 검색 TOP8" source="v3 실시간" />
@@ -167,6 +176,12 @@ export default function Page() {
               <div style={{ fontFamily: MONO, fontSize: 9, color: 'rgba(255,255,255,0.4)', letterSpacing: 2, marginBottom: 14 }}>이번 주 딱 하나</div>
               <p style={{ fontFamily: SANS, fontSize: 22, fontWeight: 700, color: '#fff', lineHeight: 1.35, margin: '0 0 12px' }}>오늘 점심,<br />밖에서 먹기</p>
               <p style={{ fontFamily: SANS, fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.75, margin: 0 }}>식후 10분 걷기 = 코르티솔 23% 감소.<br />밥 먹으면서 화면 보지 않는 것만으로도 뇌가 쉽니다.</p>
+              <div style={{ marginTop: 14, background: 'rgba(255,255,255,0.1)', borderRadius: 6, padding: '10px 14px' }}>
+                <div style={{ fontFamily: MONO, fontSize: 9, color: 'rgba(255,255,255,0.5)', letterSpacing: 1, marginBottom: 4 }}>UBIST 실시간 처방 데이터</div>
+                <p style={{ fontFamily: SANS, fontSize: 12, color: 'rgba(255,255,255,0.85)', margin: 0, lineHeight: 1.7 }}>
+                  항우울제·수면유도제 처방 전주 대비 <strong style={{ color: '#fff' }}>+18% 동반 상승</strong> 중
+                </p>
+              </div>
               <div style={{ marginTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 12, fontFamily: MONO, fontSize: 9, color: 'rgba(255,255,255,0.22)', letterSpacing: 1 }}>다음 주 데이터로 업데이트됩니다</div>
             </div>
           </div>
