@@ -49,9 +49,19 @@ function authHeaders(raw = false): HeadersInit {
   return h;
 }
 
+async function fetchWithTimeout(url: string, options: RequestInit, ms = 8000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // List files in a repo's /data folder via GitHub API
 async function listDataFiles(repo: string): Promise<Array<{ name: string }>> {
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `https://api.github.com/repos/hjkang25/${repo}/contents/data`,
     { headers: authHeaders(), cache: 'no-store' }
   );
@@ -68,7 +78,7 @@ async function fetchCSV(repo: string, prefix: string, skip = 0): Promise<string>
   const target = sorted[skip];
   if (!target) return '';
   // Use contents API with raw accept header (works for private repos)
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `https://api.github.com/repos/hjkang25/${repo}/contents/data/${target.name}`,
     { headers: authHeaders(true), cache: 'no-store' }
   );
@@ -88,6 +98,9 @@ function getWeekLabel(dateStr: string): string {
 }
 
 export async function fetchHealthData(): Promise<PageData> {
+  const t0 = Date.now();
+  console.log('[fetchHealthData] start', new Date().toISOString());
+
   // Fetch all CSVs in parallel
   const [top20LatestText, top20PrevText, relatedText, naverText] = await Promise.all([
     fetchCSV('health-trend-report-v3', 'top20_', 0),
@@ -160,6 +173,8 @@ export async function fetchHealthData(): Promise<PageData> {
   const displayDate = latestDate
     ? latestDate.replace(/-/g, '.').slice(0, 10)
     : new Date().toISOString().slice(0, 10).replace(/-/g, '.');
+
+  console.log(`[fetchHealthData] done in ${Date.now() - t0}ms — ${keywords.length} keywords, ${naverCategories.length} categories`);
 
   return {
     date: displayDate,
