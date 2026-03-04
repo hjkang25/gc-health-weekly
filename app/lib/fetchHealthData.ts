@@ -53,7 +53,7 @@ function authHeaders(raw = false): HeadersInit {
 async function listDataFiles(repo: string): Promise<Array<{ name: string }>> {
   const res = await fetch(
     `https://api.github.com/repos/hjkang25/${repo}/contents/data`,
-    { headers: authHeaders(), next: { tags: ['health-data'], revalidate: 86400 } }
+    { headers: authHeaders(), cache: 'no-store' }
   );
   if (!res.ok) return [];
   return res.json();
@@ -70,7 +70,7 @@ async function fetchCSV(repo: string, prefix: string, skip = 0): Promise<string>
   // Use contents API with raw accept header (works for private repos)
   const res = await fetch(
     `https://api.github.com/repos/hjkang25/${repo}/contents/data/${target.name}`,
-    { headers: authHeaders(true), next: { tags: ['health-data'], revalidate: 86400 } }
+    { headers: authHeaders(true), cache: 'no-store' }
   );
   if (!res.ok) return '';
   return res.text();
