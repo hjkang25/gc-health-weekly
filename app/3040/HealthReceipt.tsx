@@ -81,7 +81,7 @@ export default function HealthReceipt({ data }: { data: PageData }) {
         </div>
       </header>
 
-      <main style={{ maxWidth: 780, margin: '0 auto', padding: '24px 20px 80px' }}>
+      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px 80px' }}>
         {/* 핵심 숫자 4개 */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, marginBottom: 24 }}>
           {[
@@ -108,7 +108,7 @@ export default function HealthReceipt({ data }: { data: PageData }) {
           </p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 2, marginBottom: 2 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 2, marginBottom: 2 }}>
           {/* 좌: 검색 TOP8 */}
           <div style={{ background: C.surface, padding: '24px' }}>
             <SectionTitle label="이번 주 검색 TOP8" source="v3 실시간" />

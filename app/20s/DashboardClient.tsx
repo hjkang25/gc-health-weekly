@@ -93,8 +93,8 @@ export default function DashboardClient({ data }: { data: PageData }) {
         </div>
       </header>
 
-      <main style={{ maxWidth: 900, margin: '0 auto', padding: '24px 24px 80px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 2, marginBottom: 2 }}>
+      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px 80px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 2, marginBottom: 2 }}>
           {/* Left: keyword list */}
           <div style={{ background: '#f8f7ff', padding: '24px' }}>
             <SectionLabel text="이번 주 건강 검색 TOP8" source="v3 실시간" />
