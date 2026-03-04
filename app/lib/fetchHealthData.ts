@@ -52,14 +52,14 @@ async function fetchWithTimeout(url: string, options: RequestInit, ms = 8000): P
   }
 }
 
-// Step 1: List files in a repo's /data folder via GitHub API (token optional, only for rate limits)
+// Step 1: List files in a repo's /data folder via GitHub API (no token — repos are public)
 async function listDataFiles(repo: string): Promise<Array<{ name: string }>> {
   const url = `https://api.github.com/repos/hjkang25/${repo}/contents/data`;
   console.log(`[listDataFiles] Fetching file list from GitHub API: ${url}`);
-  const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
-  const token = process.env.GITHUB_TOKEN;
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetchWithTimeout(url, { headers, cache: 'no-store' });
+  const res = await fetchWithTimeout(
+    url,
+    { headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store' }
+  );
   if (!res.ok) {
     console.log(`[listDataFiles] Failed for ${repo}: ${res.status} ${res.statusText}`);
     return [];
