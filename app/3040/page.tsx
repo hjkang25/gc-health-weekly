@@ -1,361 +1,229 @@
-import Link from "next/link";
-import { weeklyData } from "./data";
+'use client';
+import { useState, useEffect } from 'react';
 
-const colorMap: Record<
-  string,
-  { bg: string; border: string; text: string; bar: string; badge: string }
-> = {
-  indigo: {
-    bg: "bg-indigo-50",
-    border: "border-indigo-200",
-    text: "text-indigo-700",
-    bar: "bg-indigo-500",
-    badge: "bg-indigo-100 text-indigo-700",
-  },
-  orange: {
-    bg: "bg-orange-50",
-    border: "border-orange-200",
-    text: "text-orange-700",
-    bar: "bg-orange-500",
-    badge: "bg-orange-100 text-orange-700",
-  },
-  amber: {
-    bg: "bg-amber-50",
-    border: "border-amber-200",
-    text: "text-amber-700",
-    bar: "bg-amber-500",
-    badge: "bg-amber-100 text-amber-700",
-  },
-  green: {
-    bg: "bg-green-50",
-    border: "border-green-200",
-    text: "text-green-700",
-    bar: "bg-green-500",
-    badge: "bg-green-100 text-green-700",
-  },
-  blue: {
-    bg: "bg-blue-50",
-    border: "border-blue-200",
-    text: "text-blue-700",
-    bar: "bg-blue-500",
-    badge: "bg-blue-100 text-blue-700",
+const FONT_LINK = 'https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Space+Mono:wght@400;700&display=swap';
+const SANS = "'Noto Sans KR', sans-serif";
+const MONO = "'Space Mono', monospace";
+
+const C = {
+  bg: '#ffffff', surface: '#f7f8f7', primary: '#007A33',
+  accent: '#002B49', accentDark: '#002B49', positive: '#2d6a4f',
+  muted: '#8a9e8d', border: '#d8e4da', text: '#111a13', textSub: '#4a5e4e',
+};
+
+const DATA = {
+  week: '2026년 3월 1주차', vol: 'VOL.10', date: '2026.03.03',
+  aiComment: "이번 주 검색 1위는 공황장애입니다. 3월 인사이동 시즌이 시작됐고, 2위엔 우울증과 불면증이 함께 올라왔습니다. 따로 검색하지 않고 붙여서 검색한다는 건 이미 둘이 동시에 오고 있다는 뜻입니다. 반면 '건강' 키워드는 지난주보다 20% 줄었습니다. 아플 때만 검색한다는 얘기예요.",
+  keywords: [
+    { rank: 1, kw: '공황장애',      trend: 'up',   related: ['공황장애 치료', '공황장애 증상', '공황발작'] },
+    { rank: 2, kw: '우울증·불면증',  trend: 'new',  related: ['수면제', '우울증 치료', '불면증 원인'] },
+    { rank: 3, kw: '기침·가슴통증', trend: 'up',   related: ['기침 오래가는 이유', '폐렴 초기증상'] },
+    { rank: 4, kw: '유산균',         trend: 'same', related: ['유산균 효능', '장 건강', '프로바이오틱스'] },
+    { rank: 5, kw: '혈압',           trend: 'up',   related: ['혈압 정상범위', '고혈압 증상', '혈압 낮추는법'] },
+    { rank: 6, kw: '두통',           trend: 'down', related: ['두통 원인', '편두통', '두통약'] },
+    { rank: 7, kw: '당뇨',           trend: 'up',   related: ['당뇨 초기증상', '혈당 정상범위'] },
+    { rank: 8, kw: '다이어트',       trend: 'down', related: ['다이어트 식단', '간헐적 단식'] },
+  ],
+  naverCategories: [
+    { label: '영양·건강기능식품', ratio: 42.8 },
+    { label: '운동·헬스',         ratio: 20.6 },
+    { label: '건강검진',          ratio: 15.9 },
+    { label: '다이어트',          ratio: 11.0 },
+    { label: '정신건강',          ratio: 9.7  },
+  ],
+  receipt: {
+    items: [
+      { emoji: '😰', label: '공황·불안 급등 청구',   amount: -12000 },
+      { emoji: '😴', label: '수면 부채 누적 이자',    amount: -9500  },
+      { emoji: '🫀', label: '혈압·당뇨 방치 연체료',  amount: -9000  },
+      { emoji: '🌡️', label: '환절기 면역 하락',       amount: -8000  },
+    ],
   },
 };
 
-export default function Page3040() {
-  const data = weeklyData;
+const fmt = (n: number) => `${n >= 0 ? '+' : '-'}${Math.abs(n).toLocaleString()}원`;
+
+const TREND: Record<string, { label: string; color: string; bg: string }> = {
+  up:   { label: '▲ 급등', color: C.accentDark, bg: '#e6eef4' },
+  new:  { label: 'NEW',    color: C.positive,    bg: '#e6f4ed' },
+  down: { label: '▼',      color: '#5f5fcf',     bg: '#eeeeff' },
+  same: { label: '—',      color: C.muted,       bg: C.surface },
+};
+
+function SectionTitle({ label, source }: { label: string; source?: string }) {
+  return (
+    <div style={{ borderBottom: `2px solid ${C.primary}`, paddingBottom: 10, marginBottom: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+      <span style={{ fontFamily: SANS, fontSize: 16, fontWeight: 700, color: C.text }}>{label}</span>
+      {source && <span style={{ fontFamily: MONO, fontSize: 9, color: C.muted, letterSpacing: 1 }}>{source}</span>}
+    </div>
+  );
+}
+
+export default function Page() {
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = FONT_LINK;
+    document.head.appendChild(link);
+    return () => { document.head.removeChild(link); };
+  }, []);
+
+  const toggle = (kw: string) => setChecked(p => ({ ...p, [kw]: !p[kw] }));
+  const hasChecked = Object.values(checked).some(Boolean);
+  const myTotal = DATA.keywords.filter(k => checked[k.kw]).reduce((s, k) => s - (10 - k.rank + 1) * 1000, 0);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-green-100 shadow-sm">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/"
-              className="text-gray-400 hover:text-green-600 transition-colors p-1"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-            </Link>
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg gradient-green flex items-center justify-center">
-                <span className="text-white font-bold text-xs">GC</span>
-              </div>
-              <div>
-                <span className="font-bold text-sm text-gray-900">
-                  GC Health Weekly
-                </span>
-                <span className="text-gray-400 mx-1 text-sm">·</span>
-                <span className="text-xs text-green-600 font-semibold">
-                  3040 직장인
-                </span>
-              </div>
-            </div>
+    <div style={{ minHeight: '100vh', background: C.bg, fontFamily: SANS, color: C.text }}>
+      <header style={{ background: C.primary }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 28px', borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
+          <span style={{ fontFamily: MONO, fontSize: 10, color: 'rgba(255,255,255,0.45)', letterSpacing: 2 }}>{DATA.date}</span>
+          <div style={{ display: 'flex', gap: 20 }}>
+            {['주간리포트', '3040직장인', '건강트렌드'].map(t => (
+              <span key={t} style={{ fontFamily: MONO, fontSize: 10, color: 'rgba(255,255,255,0.35)', letterSpacing: 1 }}>{t}</span>
+            ))}
           </div>
-          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full hidden sm:block">
-            {data.weekLabel}
-          </span>
+        </div>
+        <div style={{ textAlign: 'center', padding: '32px 28px 26px' }}>
+          <div style={{ fontFamily: MONO, fontSize: 10, color: 'rgba(255,255,255,0.4)', letterSpacing: 5, marginBottom: 12 }}>GC HEALTH WEEKLY</div>
+          <h1 style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(40px, 6vw, 66px)', color: '#fff', margin: '0 0 12px', letterSpacing: '-1px', lineHeight: 1 }}>건강 영수증</h1>
+          <div style={{ width: 40, height: 2, background: C.accent, margin: '0 auto 12px' }} />
+          <div style={{ fontFamily: SANS, fontSize: 13, fontWeight: 400, color: 'rgba(255,255,255,0.55)' }}>
+            이번 주 당신의 몸은 적자입니까? · {DATA.week} · {DATA.vol}
+          </div>
+        </div>
+        <div style={{ background: 'rgba(0,0,0,0.18)', padding: '16px 28px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+          <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: '#fff', background: C.accent, borderRadius: 3, padding: '3px 7px', flexShrink: 0, marginTop: 2, letterSpacing: 1 }}>EDITOR</span>
+          <p style={{ fontFamily: SANS, fontSize: 14, color: 'rgba(255,255,255,0.75)', lineHeight: 1.85, margin: 0 }}>{DATA.aiComment}</p>
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-8">
-        {/* Section 1: 이번 주 임팩트 */}
-        <section className="animate-fade-in">
-          <div className="inline-flex items-center gap-1.5 text-xs font-bold text-green-700 bg-green-100 px-3 py-1 rounded-full mb-3">
-            <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-            이번 주 직장인 건강 임팩트
-          </div>
-
-          <div className="bg-gradient-to-br from-green-700 to-green-500 rounded-2xl p-6 sm:p-8 text-white shadow-lg">
-            <div className="text-4xl mb-3">{data.impactEmoji}</div>
-            <h1 className="text-xl sm:text-2xl font-black leading-tight mb-3">
-              &ldquo;{data.impactHeadline}&rdquo;
-            </h1>
-            <p className="text-green-100 text-sm sm:text-base leading-relaxed">
-              {data.impactSub}
-            </p>
-            <div className="mt-4 pt-4 border-t border-green-400/40 flex items-center gap-2 text-xs text-green-200">
-              <svg
-                className="w-3.5 h-3.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                />
-              </svg>
-              {data.publishDate} 발행 · {data.weekLabel}
+      <main style={{ maxWidth: 780, margin: '0 auto', padding: '24px 20px 80px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, marginBottom: 24 }}>
+          {[
+            { num: '#1',    label: '공황장애',      sub: '이번 주 실검 1위', hi: true  },
+            { num: '+53%',  label: '병원 키워드',   sub: '뉴스 빈도 급등',   hi: false },
+            { num: '5.8h',  label: '3040 평균수면', sub: '권장치 -1.2h',     hi: false },
+            { num: '42.8%', label: '영양제 관심도', sub: '네이버 1위',        hi: false },
+          ].map((s, i) => (
+            <div key={i} style={{ background: s.hi ? C.accent : C.surface, padding: '18px 16px', borderBottom: `3px solid ${s.hi ? '#001a2e' : C.border}` }}>
+              <div style={{ fontFamily: MONO, fontSize: 24, fontWeight: 700, color: s.hi ? '#fff' : C.primary, marginBottom: 5, lineHeight: 1 }}>{s.num}</div>
+              <div style={{ fontFamily: SANS, fontSize: 12, fontWeight: 700, color: s.hi ? 'rgba(255,255,255,0.9)' : C.text, marginBottom: 2 }}>{s.label}</div>
+              <div style={{ fontFamily: MONO, fontSize: 9, color: s.hi ? 'rgba(255,255,255,0.55)' : C.muted }}>{s.sub}</div>
             </div>
-          </div>
-        </section>
-
-        {/* Section 2: 급상승 키워드 TOP 5 */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <div className="inline-flex items-center gap-1.5 text-xs font-bold text-red-600 bg-red-50 px-3 py-1 rounded-full mb-2">
-                <svg
-                  className="w-3 h-3"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                급상승 키워드
-              </div>
-              <h2 className="text-lg sm:text-xl font-black text-gray-900">
-                이번 주 직장인 검색 TOP 5
-              </h2>
-            </div>
-            <span className="text-xs text-gray-400">전주 대비</span>
-          </div>
-
-          <div className="space-y-3">
-            {data.keywords.map((kw) => {
-              const colors = colorMap[kw.color];
-              const barWidth = Math.min(kw.changePercent * 1.5, 100);
-              return (
-                <div
-                  key={kw.rank}
-                  className={`rounded-xl border ${colors.border} ${colors.bg} p-4`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl font-black text-gray-200 w-6 text-center leading-none">
-                        {kw.rank}
-                      </span>
-                      <div>
-                        <span className="font-bold text-gray-900 text-base">
-                          {kw.name}
-                        </span>
-                        <span
-                          className={`ml-2 text-xs px-1.5 py-0.5 rounded ${colors.badge} font-semibold`}
-                        >
-                          #{kw.tag}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <svg
-                        className="w-3 h-3 text-red-500"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      <span className="text-sm font-black text-red-600">
-                        +{kw.changePercent}%
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Progress bar */}
-                  <div className="h-1.5 bg-white/70 rounded-full overflow-hidden mb-3">
-                    <div
-                      className={`h-full ${colors.bar} rounded-full transition-all duration-700`}
-                      style={{ width: `${barWidth}%` }}
-                    />
-                  </div>
-
-                  {/* Body sensation */}
-                  <div className="text-xs text-gray-500 italic">
-                    💬 &ldquo;{kw.bodySensation}&rdquo;
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Section 3: 키워드별 체감 인사이트 */}
-        <section>
-          <div className="inline-flex items-center gap-1.5 text-xs font-bold text-green-700 bg-green-100 px-3 py-1 rounded-full mb-3">
-            🔍 키워드별 체감 인사이트
-          </div>
-          <h2 className="text-lg sm:text-xl font-black text-gray-900 mb-4">
-            내 몸에 와닿는 해설
-          </h2>
-
-          <div className="space-y-4">
-            {data.keywords.map((kw) => {
-              const colors = colorMap[kw.color];
-              return (
-                <div
-                  key={kw.rank}
-                  className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm card-hover"
-                >
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={`w-8 h-8 rounded-lg ${colors.bg} ${colors.border} border flex items-center justify-center text-sm font-black ${colors.text} flex-shrink-0`}
-                    >
-                      {kw.rank}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        <span className="font-bold text-gray-900">
-                          {kw.name}
-                        </span>
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded-full ${colors.badge} font-semibold`}
-                        >
-                          #{kw.tag}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600 leading-relaxed">
-                        {kw.insight}
-                      </p>
-                      <div
-                        className={`mt-3 text-xs ${colors.text} ${colors.bg} rounded-lg px-3 py-2 border ${colors.border}`}
-                      >
-                        <span className="font-semibold">체감 포인트:</span>{" "}
-                        {kw.bodySensation}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Section 4: 주목 뉴스 */}
-        <section>
-          <div className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-full mb-3">
-            📰 직장인 주목 뉴스
-          </div>
-          <h2 className="text-lg sm:text-xl font-black text-gray-900 mb-4">
-            이번 주 꼭 읽어야 할 뉴스 3
-          </h2>
-
-          <div className="space-y-4">
-            {data.news.map((item, idx) => (
-              <div
-                key={item.id}
-                className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm card-hover"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="text-3xl flex-shrink-0">{item.emoji}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                      <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
-                        {item.category}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {item.source}
-                      </span>
-                      <span className="text-xs text-gray-300">·</span>
-                      <span className="text-xs text-gray-400">
-                        읽기 {item.readTime}
-                      </span>
-                    </div>
-                    <h3 className="font-bold text-gray-900 text-sm sm:text-base leading-snug mb-2">
-                      {item.title}
-                    </h3>
-                    <p className="text-xs sm:text-sm text-gray-500 leading-relaxed">
-                      {item.summary}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-3 ml-10 sm:ml-14 text-xs text-gray-400 flex items-center gap-1">
-                  <span className="w-5 h-px bg-gray-200 block"></span>
-                  뉴스 {idx + 1}/{data.news.length}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Section 5: 다음 주 예고 */}
-        <section className="pb-6">
-          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-6 text-white">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-lg">👀</span>
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                {data.nextWeekPreview.teaser}
-              </span>
-            </div>
-            <h2 className="text-base sm:text-lg font-black mb-4 text-gray-100">
-              다음 주 GC Health Weekly 예고
-            </h2>
-            <ul className="space-y-3">
-              {data.nextWeekPreview.topics.map((topic, i) => (
-                <li key={i} className="flex items-start gap-3">
-                  <div className="w-5 h-5 rounded-full bg-green-500/20 border border-green-500/40 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-green-400 text-xs font-bold">
-                      {i + 1}
-                    </span>
-                  </div>
-                  <span className="text-sm text-gray-300 leading-relaxed">
-                    {topic}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-5 pt-4 border-t border-gray-700">
-              <p className="text-xs text-gray-500">
-                매주 월요일 오전 발행 · 구독하면 가장 먼저 받아볼 수 있어요
-              </p>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-gray-900 text-gray-400 py-6 px-4">
-        <div className="max-w-3xl mx-auto text-center">
-          <p className="text-xs mb-2">
-            본 콘텐츠는 건강 정보 제공을 목적으로 하며, 의학적 진단·치료를
-            대체하지 않습니다.
-          </p>
-          <p className="text-xs text-gray-600">
-            © 2026 GC Health Weekly. All rights reserved.
-          </p>
+          ))}
         </div>
-      </footer>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 2, marginBottom: 2 }}>
+          <div style={{ background: C.surface, padding: '24px' }}>
+            <SectionTitle label="이번 주 검색 TOP8" source="v3 실시간" />
+            {DATA.keywords.map((item) => {
+              const tr = TREND[item.trend];
+              const isExp = expanded === item.kw;
+              return (
+                <div key={item.kw} style={{ borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', cursor: 'pointer' }} onClick={() => toggle(item.kw)}>
+                    <div style={{ width: 20, height: 20, borderRadius: 4, flexShrink: 0, background: checked[item.kw] ? C.primary : 'transparent', border: `2px solid ${checked[item.kw] ? C.primary : C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}>
+                      {checked[item.kw] && <span style={{ color: '#fff', fontSize: 11, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+                    </div>
+                    <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: item.rank <= 3 ? C.accentDark : C.border, width: 22, flexShrink: 0 }}>{String(item.rank).padStart(2, '0')}</span>
+                    <span style={{ fontFamily: SANS, fontSize: 14, fontWeight: checked[item.kw] ? 700 : 400, color: checked[item.kw] ? C.text : C.textSub, flex: 1 }}>{item.kw}</span>
+                    <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: tr.color, background: tr.bg, borderRadius: 3, padding: '2px 6px', flexShrink: 0 }}>{tr.label}</span>
+                    <span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, color: checked[item.kw] ? C.accentDark : C.border, width: 68, textAlign: 'right', flexShrink: 0 }}>{fmt(-(10 - item.rank + 1) * 1000)}</span>
+                    <button onClick={(e) => { e.stopPropagation(); setExpanded(isExp ? null : item.kw); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.border, fontSize: 12, padding: 0, flexShrink: 0, transform: isExp ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s' }}>⌄</button>
+                  </div>
+                  {isExp && (
+                    <div style={{ padding: '8px 0 12px 52px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ fontFamily: MONO, fontSize: 9, color: C.muted, marginRight: 4, alignSelf: 'center' }}>같이 검색</span>
+                      {item.related.map(r => (
+                        <span key={r} style={{ fontFamily: SANS, fontSize: 11, color: C.textSub, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '3px 8px' }}>{r}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div style={{ background: C.surface, padding: '24px', flex: '0 0 auto' }}>
+              <SectionTitle label="건강 관심사" source="v1 네이버" />
+              {DATA.naverCategories.map((c, i) => (
+                <div key={c.label} style={{ marginBottom: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                    <span style={{ fontFamily: SANS, fontSize: 12, color: C.textSub }}>{c.label}</span>
+                    <span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, color: i === 0 ? C.positive : C.muted }}>{c.ratio}%</span>
+                  </div>
+                  <div style={{ height: 5, background: C.border, borderRadius: 2 }}>
+                    <div style={{ height: '100%', width: `${c.ratio}%`, background: i === 0 ? C.positive : C.muted + '55', borderRadius: 2 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ background: C.primary, padding: '22px 20px', flex: 1 }}>
+              <div style={{ fontFamily: MONO, fontSize: 9, color: 'rgba(255,255,255,0.4)', letterSpacing: 2, marginBottom: 14 }}>이번 주 딱 하나</div>
+              <p style={{ fontFamily: SANS, fontSize: 22, fontWeight: 700, color: '#fff', lineHeight: 1.35, margin: '0 0 12px' }}>오늘 점심,<br />밖에서 먹기</p>
+              <p style={{ fontFamily: SANS, fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.75, margin: 0 }}>식후 10분 걷기 = 코르티솔 23% 감소.<br />밥 먹으면서 화면 보지 않는 것만으로도 뇌가 쉽니다.</p>
+              <div style={{ marginTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 12, fontFamily: MONO, fontSize: 9, color: 'rgba(255,255,255,0.22)', letterSpacing: 1 }}>다음 주 데이터로 업데이트됩니다</div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ background: C.surface, marginTop: 2 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', borderBottom: `2px solid ${C.primary}` }}>
+            <div style={{ padding: '20px 24px' }}>
+              <div style={{ fontFamily: MONO, fontSize: 9, color: C.muted, letterSpacing: 2, marginBottom: 6 }}>건강 영수증 · HEALTH RECEIPT</div>
+              <div style={{ fontFamily: SANS, fontSize: 17, fontWeight: 700, color: C.text }}>이번 주 나의 건강 청구서</div>
+            </div>
+            <div style={{ background: C.accent, padding: '20px 28px', display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'right' }}>
+              <div style={{ fontFamily: MONO, fontSize: 9, color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>대한민국 직장인 평균</div>
+              <div style={{ fontFamily: MONO, fontSize: 26, fontWeight: 700, color: '#fff' }}>-38,500원</div>
+            </div>
+          </div>
+          <div style={{ padding: '24px' }}>
+            <button onClick={() => setReceiptOpen(!receiptOpen)} style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 12px', display: 'flex', justifyContent: 'space-between', borderBottom: `1px dashed ${C.border}`, marginBottom: 16 }}>
+              <span style={{ fontFamily: MONO, fontSize: 10, color: C.muted, letterSpacing: 1 }}>국민 평균 청구 내역 {receiptOpen ? '▲ 접기' : '▼ 펼치기'}</span>
+            </button>
+            {receiptOpen && (
+              <div style={{ marginBottom: 16 }}>
+                {DATA.receipt.items.map((item, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: `1px dashed ${C.border}` }}>
+                    <span style={{ fontFamily: SANS, fontSize: 13, color: C.textSub }}>{item.emoji} {item.label}</span>
+                    <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: C.accentDark }}>{fmt(item.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ fontFamily: MONO, fontSize: 9, color: C.muted, letterSpacing: 2, marginBottom: 14 }}>나의 영수증 — 상단 키워드 체크 시 반영</div>
+            {hasChecked ? (
+              <>
+                {DATA.keywords.filter(k => checked[k.kw]).map(item => (
+                  <div key={item.kw} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: `1px dashed ${C.border}` }}>
+                    <span style={{ fontFamily: SANS, fontSize: 13, color: C.text }}>{item.kw}</span>
+                    <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: C.accentDark }}>{fmt(-(10 - item.rank + 1) * 1000)}</span>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 16, borderTop: `2px solid ${C.primary}` }}>
+                  <span style={{ fontFamily: MONO, fontSize: 11, color: C.muted }}>나의 총액</span>
+                  <span style={{ fontFamily: MONO, fontSize: 32, fontWeight: 700, color: C.accentDark }}>{fmt(myTotal)}</span>
+                </div>
+              </>
+            ) : (
+              <div style={{ padding: '28px 0', textAlign: 'center', fontFamily: SANS, fontSize: 13, color: C.border, lineHeight: 1.7 }}>
+                상단 키워드를 체크하면<br />나의 영수증이 완성됩니다
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={{ background: C.primary, padding: '14px 24px', display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+          <span style={{ fontFamily: MONO, fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>GC HEALTH WEEKLY · {DATA.week}</span>
+          <span style={{ fontFamily: MONO, fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>DATA: v1 · v3 · Claude AI</span>
+        </div>
+      </main>
     </div>
   );
 }
