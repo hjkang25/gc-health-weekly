@@ -93,7 +93,7 @@ export default function DashboardClient({ data }: { data: PageData }) {
         </div>
       </header>
 
-      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px 80px' }}>
+      <main style={{ padding: '24px 60px 80px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 2, marginBottom: 2 }}>
           {/* Left: keyword list */}
           <div style={{ background: '#f8f7ff', padding: '24px' }}>

@@ -81,7 +81,7 @@ export default function HealthReceipt({ data }: { data: PageData }) {
         </div>
       </header>
 
-      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 40px 80px' }}>
+      <main style={{ padding: '24px 60px 80px' }}>
         {/* 핵심 숫자 4개 */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, marginBottom: 24 }}>
           {[
