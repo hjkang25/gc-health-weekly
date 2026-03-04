@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { fetchHealthData } from '../lib/fetchHealthData';
 import DashboardClient from './DashboardClient';
 
