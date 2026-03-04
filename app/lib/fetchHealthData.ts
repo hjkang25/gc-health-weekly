@@ -21,7 +21,7 @@ export type PageData = {
 
 // Quoted-field-aware CSV parser
 function parseCSV(text: string): Record<string, string>[] {
-  const lines = text.trim().split('\n').filter(l => l.trim());
+  const lines = text.replace(/^\uFEFF/, '').trim().split('\n').filter(l => l.trim());
   if (lines.length < 2) return [];
   const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
   return lines.slice(1).map(line => {
@@ -40,11 +40,20 @@ function parseCSV(text: string): Record<string, string>[] {
   });
 }
 
+const TOKEN = process.env.GITHUB_TOKEN;
+
+function authHeaders(raw = false): HeadersInit {
+  const h: Record<string, string> = {};
+  if (TOKEN) h['Authorization'] = `Bearer ${TOKEN}`;
+  if (raw) h['Accept'] = 'application/vnd.github.v3.raw';
+  return h;
+}
+
 // List files in a repo's /data folder via GitHub API
-async function listDataFiles(repo: string): Promise<Array<{ name: string; download_url: string }>> {
+async function listDataFiles(repo: string): Promise<Array<{ name: string }>> {
   const res = await fetch(
     `https://api.github.com/repos/hjkang25/${repo}/contents/data`,
-    { next: { tags: ['health-data'], revalidate: 86400 } }
+    { headers: authHeaders(), next: { tags: ['health-data'], revalidate: 86400 } }
   );
   if (!res.ok) return [];
   return res.json();
@@ -58,7 +67,12 @@ async function fetchCSV(repo: string, prefix: string, skip = 0): Promise<string>
     .sort((a, b) => b.name.localeCompare(a.name));
   const target = sorted[skip];
   if (!target) return '';
-  const res = await fetch(target.download_url, { next: { tags: ['health-data'], revalidate: 86400 } });
+  // Use contents API with raw accept header (works for private repos)
+  const res = await fetch(
+    `https://api.github.com/repos/hjkang25/${repo}/contents/data/${target.name}`,
+    { headers: authHeaders(true), next: { tags: ['health-data'], revalidate: 86400 } }
+  );
+  if (!res.ok) return '';
   return res.text();
 }
 
@@ -126,7 +140,7 @@ export async function fetchHealthData(): Promise<PageData> {
     return { rank, kw, trend, related: rels.slice(0, 4) };
   });
 
-  // naverCategories: most recent period ratio per keyword_group
+  // naverCategories: most recent period ratio per keyword_group, top 5
   const groupMap = new Map<string, { ratio: number; period: string }>();
   for (const row of naver) {
     const existing = groupMap.get(row.keyword_group);
@@ -140,7 +154,8 @@ export async function fetchHealthData(): Promise<PageData> {
 
   const naverCategories: NaverCategory[] = Array.from(groupMap.entries())
     .map(([label, { ratio }]) => ({ label, ratio: Math.round(ratio * 10) / 10 }))
-    .sort((a, b) => b.ratio - a.ratio);
+    .sort((a, b) => b.ratio - a.ratio)
+    .slice(0, 5);
 
   const displayDate = latestDate
     ? latestDate.replace(/-/g, '.').slice(0, 10)
