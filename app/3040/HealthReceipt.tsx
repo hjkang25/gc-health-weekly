@@ -2,226 +2,375 @@
 import { useState, useEffect } from 'react';
 import type { PageData } from '../lib/fetchHealthData';
 
-const FONT_LINK = 'https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Space+Mono:wght@400;700&display=swap';
 const SANS = "'Noto Sans KR', sans-serif";
-const MONO = "'Space Mono', monospace";
 
 const C = {
-  bg: '#ffffff', surface: '#f7f8f7', primary: '#007A33',
-  accent: '#002B49', accentDark: '#002B49', positive: '#2d6a4f',
-  muted: '#8a9e8d', border: '#d8e4da', text: '#111a13', textSub: '#4a5e4e',
+  primary:     '#007A33',
+  deepBlue:    '#002B49',
+  yellow:      '#FFC845',
+  brightGreen: '#97D700',
+  red:         '#E4002B',
+  mildBlue:    '#0072CE',
+  lightBlue:   '#00A9E0',
+  mildGreen:   '#43B02A',
+  bg:          '#f2f4f3',
+  white:       '#ffffff',
+  text:        '#111827',
+  textSub:     '#6b7280',
+  border:      '#e5e7eb',
 };
 
-const STATIC = {
-  aiComment: "이번 주 검색 1위는 공황장애입니다. 3월 인사이동 시즌이 시작됐고, 2위엔 우울증과 불면증이 함께 올라왔습니다. 따로 검색하지 않고 붙여서 검색한다는 건 이미 둘이 동시에 오고 있다는 뜻입니다. 반면 '건강' 키워드는 지난주보다 20% 줄었습니다. 아플 때만 검색한다는 얘기예요.",
-  receiptItems: [
-    { emoji: '😰', label: '공황·불안 급등 청구',   amount: -12000 },
-    { emoji: '😴', label: '수면 부채 누적 이자',    amount: -9500  },
-    { emoji: '🫀', label: '혈압·당뇨 방치 연체료',  amount: -9000  },
-    { emoji: '🌡️', label: '환절기 면역 하락',       amount: -8000  },
-  ],
-};
+const TAGS_3040 = [
+  '만성 피로', '수면 부채', '혈압 불안',
+  '소화 장애', '허리 통증', '눈 피로',
+  '번아웃', '혈당 걱정', '두통',
+];
 
-const fmt = (n: number) => `${n >= 0 ? '+' : '-'}${Math.abs(n).toLocaleString()}원`;
+const AI_COMMENT =
+  '이번 주 검색 1위는 기침·가슴통증입니다. 3월 인사이동 시즌이 시작됐고, 2위엔 우울증과 불면증이 함께 올라왔습니다. 따로 검색하지 않고 붙여서 검색한다는 건 이미 둘이 동시에 오고 있다는 뜻입니다.';
+
+const EXPERT_COMMENT =
+  '수면 1.2시간 감소와 공황장애 검색 급등은 밀접한 상관관계가 있습니다. 3월 초 직장인의 심리적 소진(Burn-out)이 데이터로 증명된 셈입니다.';
+
+const RECEIPT_ITEMS = [
+  { emoji: '😰', label: '공황·불안 급등 청구',   amount: -12000 },
+  { emoji: '😴', label: '수면 부채 누적 이자',    amount: -9500  },
+  { emoji: '🫀', label: '혈압·당뇨 방치 연체료',  amount: -9000  },
+  { emoji: '🌡️', label: '환절기 면역 하락',       amount: -8000  },
+];
 
 const TREND: Record<string, { label: string; color: string; bg: string }> = {
-  up:   { label: '▲ 급등', color: C.accentDark, bg: '#e6eef4' },
-  new:  { label: 'NEW',    color: C.positive,    bg: '#e6f4ed' },
-  down: { label: '▼',      color: '#5f5fcf',     bg: '#eeeeff' },
-  same: { label: '—',      color: C.muted,       bg: C.surface },
+  up:   { label: '▲ 급등', color: C.red,       bg: '#fce8eb' },
+  new:  { label: 'NEW',    color: C.mildGreen,  bg: '#edfce8' },
+  down: { label: '▼',      color: C.mildBlue,   bg: '#e8f3fc' },
+  same: { label: '—',      color: '#9ca3af',    bg: '#f3f4f6' },
 };
 
-function SectionTitle({ label, source }: { label: string; source?: string }) {
-  return (
-    <div style={{ borderBottom: `2px solid ${C.primary}`, paddingBottom: 10, marginBottom: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-      <span style={{ fontFamily: SANS, fontSize: 16, fontWeight: 700, color: C.text }}>{label}</span>
-      {source && <span style={{ fontFamily: MONO, fontSize: 9, color: C.muted, letterSpacing: 1 }}>{source}</span>}
-    </div>
-  );
+function fmt(n: number) {
+  return `${n >= 0 ? '+' : ''}${n.toLocaleString()}원`;
 }
 
 export default function HealthReceipt({ data }: { data: PageData }) {
+  const [loaded,      setLoaded]      = useState(false);
+  const [progress,    setProgress]    = useState(0);
+  const [checked,     setChecked]     = useState<Record<string, boolean>>({});
+  const [expanded,    setExpanded]    = useState<string | null>(null);
   const [receiptOpen, setReceiptOpen] = useState(false);
-  const [checked, setChecked] = useState<Record<string, boolean>>({});
-  const [expanded, setExpanded] = useState<string | null>(null);
+
   useEffect(() => {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
-    link.href = FONT_LINK;
+    link.href = 'https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap';
     document.head.appendChild(link);
-    return () => { document.head.removeChild(link); };
+
+    let p = 0;
+    const iv = setInterval(() => {
+      p += Math.random() * 18 + 6;
+      if (p >= 100) {
+        p = 100;
+        clearInterval(iv);
+        setTimeout(() => setLoaded(true), 250);
+      }
+      setProgress(Math.min(p, 100));
+    }, 70);
+
+    return () => { clearInterval(iv); document.head.removeChild(link); };
   }, []);
 
   const toggle = (kw: string) => setChecked(p => ({ ...p, [kw]: !p[kw] }));
-  const hasChecked = Object.values(checked).some(Boolean);
-  const myTotal = data.keywords.filter(k => checked[k.kw]).reduce((s, k) => s - (10 - k.rank + 1) * 1000, 0);
+  const checkedKws  = data.keywords.filter(k => checked[k.kw]);
+  const myTotal     = checkedKws.reduce((s, k) => s - (11 - k.rank) * 1000, 0);
+  const hasChecked  = checkedKws.length > 0;
+  const kwSet       = new Set(data.keywords.map(k => k.kw));
+  const isHighlight = (tag: string) =>
+    [...kwSet].some(k => tag.includes(k.slice(0, 2)) || k.includes(tag.slice(0, 2)));
 
+  const top4 = data.keywords.slice(0, 4);
+
+  /* ─── Loading screen ─── */
+  if (!loaded) {
+    return (
+      <div style={{ minHeight: '100vh', background: C.deepBlue, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: SANS }}>
+        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', letterSpacing: 5, marginBottom: 28 }}>GC HEALTH WEEKLY</div>
+        <div style={{ fontSize: 32, fontWeight: 900, color: '#fff', marginBottom: 6 }}>건강 영수증</div>
+        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 48 }}>3040 직장인 주간 건강 리포트</div>
+        <div style={{ width: 240, height: 5, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${progress}%`, background: `linear-gradient(90deg, ${C.primary}, ${C.brightGreen})`, borderRadius: 3, transition: 'width 0.08s linear' }} />
+        </div>
+        <div style={{ marginTop: 14, fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>데이터 로딩 중...</div>
+      </div>
+    );
+  }
+
+  /* ─── Main render ─── */
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, fontFamily: SANS, color: C.text }}>
-      <header style={{ background: C.primary }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 28px', borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
-          <span style={{ fontFamily: MONO, fontSize: 10, color: 'rgba(255,255,255,0.45)', letterSpacing: 2 }}>{data.date}</span>
-          <div style={{ display: 'flex', gap: 20 }}>
-            {['주간리포트', '3040직장인', '건강트렌드'].map(t => (
-              <span key={t} style={{ fontFamily: MONO, fontSize: 10, color: 'rgba(255,255,255,0.35)', letterSpacing: 1 }}>{t}</span>
+    <div style={{ minHeight: '100vh', background: C.bg, fontFamily: SANS, color: C.text, animation: 'gcFadeIn 0.4s ease' }}>
+      <style>{`@keyframes gcFadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}`}</style>
+
+      {/* ── Nav ── */}
+      <nav style={{ background: C.deepBlue, position: 'sticky', top: 0, zIndex: 50, boxShadow: '0 2px 12px rgba(0,0,0,0.25)' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 54 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 30, height: 30, background: C.primary, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ color: '#fff', fontSize: 11, fontWeight: 900 }}>GC</span>
+            </div>
+            <span style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>Health Weekly</span>
+          </div>
+          <div style={{ display: 'flex', gap: 28 }}>
+            {['주간리포트', '3040 직장인', '건강트렌드'].map(t => (
+              <span key={t} style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>{t}</span>
             ))}
           </div>
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>{data.date}</span>
         </div>
-        <div style={{ textAlign: 'center', padding: '32px 28px 26px' }}>
-          <div style={{ fontFamily: MONO, fontSize: 10, color: 'rgba(255,255,255,0.4)', letterSpacing: 5, marginBottom: 12 }}>GC HEALTH WEEKLY</div>
-          <h1 style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(40px, 6vw, 66px)', color: '#fff', margin: '0 0 12px', letterSpacing: '-1px', lineHeight: 1 }}>건강 영수증</h1>
-          <div style={{ width: 40, height: 2, background: C.accent, margin: '0 auto 12px' }} />
-          <div style={{ fontFamily: SANS, fontSize: 13, fontWeight: 400, color: 'rgba(255,255,255,0.55)' }}>
-            이번 주 당신의 몸은 적자입니까? · {data.week} · {data.vol}
+      </nav>
+
+      {/* ── Header ── */}
+      <header style={{ background: C.deepBlue }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '52px 32px 40px' }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.yellow, background: 'rgba(255,200,69,0.14)', borderRadius: 5, padding: '4px 12px', letterSpacing: 0.5 }}>3040 직장인</span>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', background: 'rgba(255,255,255,0.07)', borderRadius: 5, padding: '4px 12px' }}>{data.week}</span>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', background: 'rgba(255,255,255,0.07)', borderRadius: 5, padding: '4px 12px' }}>{data.vol}</span>
           </div>
-        </div>
-        <div style={{ background: 'rgba(0,0,0,0.18)', padding: '16px 28px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-          <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: '#fff', background: C.accent, borderRadius: 3, padding: '3px 7px', flexShrink: 0, marginTop: 2, letterSpacing: 1 }}>EDITOR</span>
-          <p style={{ fontFamily: SANS, fontSize: 14, color: 'rgba(255,255,255,0.75)', lineHeight: 1.85, margin: 0 }}>{STATIC.aiComment}</p>
+          <h1 style={{ fontSize: 'clamp(44px, 6vw, 76px)', fontWeight: 900, color: '#fff', margin: '0 0 8px', lineHeight: 1.05, letterSpacing: '-1.5px' }}>
+            건강 영수증
+          </h1>
+          <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.4)', margin: '0 0 36px' }}>
+            이번 주 당신의 몸은 적자입니까?
+          </p>
+          <div style={{ background: 'rgba(255,255,255,0.06)', borderLeft: `4px solid ${C.primary}`, borderRadius: '0 14px 14px 0', padding: '18px 22px', maxWidth: 680 }}>
+            <div style={{ fontSize: 10, color: C.brightGreen, letterSpacing: 3, marginBottom: 10, fontWeight: 700 }}>EDITOR</div>
+            <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.78)', lineHeight: 1.95, margin: 0 }}>{AI_COMMENT}</p>
+          </div>
         </div>
       </header>
 
-      <main style={{ maxWidth: 900, margin: '0 auto', padding: '24px 40px 80px' }}>
-        {/* 핵심 숫자 4개 */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, marginBottom: 24 }}>
+      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 32px 80px' }}>
+
+        {/* ── 3 stat cards ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 20 }}>
           {[
-            { num: '#1',    label: data.topKeyword || '공황장애', sub: '이번 주 실검 1위', hi: true  },
-            { num: '+53%',  label: '병원 키워드',                 sub: '뉴스 빈도 급등',   hi: false },
-            { num: '5.8h',  label: '3040 평균수면',               sub: '권장치 -1.2h',     hi: false },
-            { num: `${data.naverCategories[0]?.ratio ?? 42.8}%`, label: data.naverCategories[0]?.label ?? '영양제 관심도', sub: '네이버 1위', hi: false },
-          ].map((s, i) => (
-            <div key={i} style={{ background: s.hi ? C.accent : C.surface, padding: '18px 16px', borderBottom: `3px solid ${s.hi ? '#001a2e' : C.border}` }}>
-              <div style={{ fontFamily: MONO, fontSize: 24, fontWeight: 700, color: s.hi ? '#fff' : C.primary, marginBottom: 5, lineHeight: 1 }}>{s.num}</div>
-              <div style={{ fontFamily: SANS, fontSize: 12, fontWeight: 700, color: s.hi ? 'rgba(255,255,255,0.9)' : C.text, marginBottom: 2 }}>{s.label}</div>
-              <div style={{ fontFamily: MONO, fontSize: 9, color: s.hi ? 'rgba(255,255,255,0.55)' : C.muted }}>{s.sub}</div>
+            { label: '이번 주 실검 1위', value: data.topKeyword || '기침 가슴통증', sub: '3040 직장인 검색', accent: C.primary },
+            { label: '병원 키워드 빈도', value: '+53%', sub: '뉴스 급등', accent: C.mildBlue },
+            {
+              label: '네이버 건강 관심 1위',
+              value: `${data.naverCategories[0]?.ratio ?? 42.8}%`,
+              sub: data.naverCategories[0]?.label ?? '건강검진',
+              accent: C.mildGreen,
+            },
+          ].map((card, i) => (
+            <div key={i} style={{ background: C.white, borderRadius: 16, padding: '28px 28px 22px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
+              <div style={{ fontSize: 11, color: C.textSub, letterSpacing: 0.5, marginBottom: 14, fontWeight: 500 }}>{card.label}</div>
+              <div style={{ fontSize: 34, fontWeight: 900, color: card.accent, lineHeight: 1.1, marginBottom: 8 }}>{card.value}</div>
+              <div style={{ fontSize: 12, color: C.textSub }}>{card.sub}</div>
             </div>
           ))}
         </div>
 
-        {/* 전문가 코멘트 */}
-        <div style={{ background: '#f0f7f3', borderLeft: '4px solid #007A33', padding: '16px 20px', marginBottom: 24 }}>
-          <div style={{ fontFamily: MONO, fontSize: 9, color: '#007A33', letterSpacing: 2, marginBottom: 8 }}>
-            GC 지씨케어 전문 의료진 코멘트
-          </div>
-          <p style={{ fontFamily: SANS, fontSize: 14, color: '#111a13', lineHeight: 1.85, margin: 0 }}>
-            수면 시간 1.2시간 감소와 공황장애 검색량 급등은 밀접한 상관관계가 있습니다. 신학기·분기 초 업무 부담이 겹치는 3월 초, 직장인들의 심리적 소진(Burn-out)이 데이터로 증명된 셈입니다.
-          </p>
-        </div>
+        {/* ── 2-col: TOP8 + right panel ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 16, marginBottom: 16 }}>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 2, marginBottom: 2 }}>
-          {/* 좌: 검색 TOP8 */}
-          <div style={{ background: C.surface, padding: '24px' }}>
-            <SectionTitle label="이번 주 검색 TOP8" source="v3 실시간" />
-            {data.keywords.map((item) => {
-              const tr = TREND[item.trend];
+          {/* LEFT: TOP8 */}
+          <div style={{ background: C.white, borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
+            <div style={{ padding: '24px 28px 16px', borderBottom: `2px solid ${C.primary}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 16, fontWeight: 800 }}>이번 주 검색 TOP8</span>
+              <span style={{ fontSize: 10, color: C.textSub, letterSpacing: 1 }}>v3 실시간</span>
+            </div>
+            {/* column headings */}
+            <div style={{ display: 'grid', gridTemplateColumns: '38px 28px 1fr 80px 84px 28px', gap: 8, padding: '9px 28px', background: '#f9fafb', borderBottom: `1px solid ${C.border}` }}>
+              {['', 'NO', '키워드', '트렌드', '청구액', ''].map((h, i) => (
+                <span key={i} style={{ fontSize: 10, color: C.textSub, fontWeight: 700, textAlign: i >= 3 ? 'right' : 'left' }}>{h}</span>
+              ))}
+            </div>
+            {data.keywords.map(item => {
+              const tr    = TREND[item.trend];
               const isExp = expanded === item.kw;
               return (
                 <div key={item.kw} style={{ borderBottom: `1px solid ${C.border}` }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', cursor: 'pointer' }} onClick={() => toggle(item.kw)}>
-                    <div style={{ width: 20, height: 20, borderRadius: 4, flexShrink: 0, background: checked[item.kw] ? C.primary : 'transparent', border: `2px solid ${checked[item.kw] ? C.primary : C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}>
-                      {checked[item.kw] && <span style={{ color: '#fff', fontSize: 11, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+                  <div
+                    style={{ display: 'grid', gridTemplateColumns: '38px 28px 1fr 80px 84px 28px', gap: 8, alignItems: 'center', padding: '14px 28px', cursor: 'pointer', background: checked[item.kw] ? '#f0faf4' : 'transparent', transition: 'background 0.15s' }}
+                    onClick={() => toggle(item.kw)}
+                  >
+                    <div style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${checked[item.kw] ? C.primary : C.border}`, background: checked[item.kw] ? C.primary : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}>
+                      {checked[item.kw] && <span style={{ color: '#fff', fontSize: 11, fontWeight: 900 }}>✓</span>}
                     </div>
-                    <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: item.rank <= 3 ? C.accentDark : C.border, width: 22, flexShrink: 0 }}>{String(item.rank).padStart(2, '0')}</span>
-                    <span style={{ fontFamily: SANS, fontSize: 14, fontWeight: checked[item.kw] ? 700 : 400, color: checked[item.kw] ? C.text : C.textSub, flex: 1 }}>{item.kw}</span>
-                    <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: tr.color, background: tr.bg, borderRadius: 3, padding: '2px 6px', flexShrink: 0 }}>{tr.label}</span>
-                    <span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, color: checked[item.kw] ? C.accentDark : C.border, width: 68, textAlign: 'right', flexShrink: 0 }}>{fmt(-(10 - item.rank + 1) * 1000)}</span>
-                    <button onClick={(e) => { e.stopPropagation(); setExpanded(isExp ? null : item.kw); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.border, fontSize: 12, padding: 0, flexShrink: 0, transform: isExp ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s' }}>⌄</button>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: item.rank <= 3 ? C.primary : '#d1d5db' }}>{String(item.rank).padStart(2, '0')}</span>
+                    <span style={{ fontSize: 17, fontWeight: checked[item.kw] ? 700 : 400, color: checked[item.kw] ? C.text : '#374151' }}>{item.kw}</span>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: tr.color, background: tr.bg, borderRadius: 4, padding: '3px 8px' }}>{tr.label}</span>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: C.deepBlue, textAlign: 'right' }}>{fmt(-(11 - item.rank) * 1000)}</span>
+                    <button
+                      onClick={e => { e.stopPropagation(); setExpanded(isExp ? null : item.kw); }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, color: C.textSub, padding: 0, transform: isExp ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
+                    >⌄</button>
                   </div>
-                  {isExp && item.related.length > 0 && (
-                    <div style={{ padding: '8px 0 12px 52px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <span style={{ fontFamily: MONO, fontSize: 9, color: C.muted, marginRight: 4, alignSelf: 'center' }}>같이 검색</span>
-                      {item.related.map(r => (
-                        <span key={r} style={{ fontFamily: SANS, fontSize: 11, color: C.textSub, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '3px 8px' }}>{r}</span>
-                      ))}
+                  {isExp && (
+                    <div style={{ padding: '10px 28px 14px 98px', display: 'flex', flexWrap: 'wrap', gap: 6, background: '#f9fafb' }}>
+                      <span style={{ fontSize: 10, color: C.textSub, alignSelf: 'center', marginRight: 4 }}>같이 검색</span>
+                      {item.related.length > 0
+                        ? item.related.map(r => (
+                            <span key={r} style={{ fontSize: 12, color: '#374151', background: C.white, border: `1px solid ${C.border}`, borderRadius: 20, padding: '4px 12px' }}>{r}</span>
+                          ))
+                        : <span style={{ fontSize: 12, color: '#9ca3af' }}>관련 검색어 없음</span>
+                      }
                     </div>
                   )}
                 </div>
               );
             })}
+            {data.keywords.length === 0 && (
+              <div style={{ padding: '48px 0', textAlign: 'center', fontSize: 14, color: '#9ca3af' }}>데이터 로딩 중...</div>
+            )}
           </div>
 
-          {/* 우: 네이버 관심사 + 이번 주 딱 하나 */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <div style={{ background: C.surface, padding: '24px', flex: '0 0 auto' }}>
-              <SectionTitle label="건강 관심사" source="v1 네이버" />
+          {/* RIGHT: naver bars + expert */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ background: C.white, borderRadius: 16, padding: '24px 28px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
+                <span style={{ fontSize: 16, fontWeight: 800 }}>건강 관심사</span>
+                <span style={{ fontSize: 10, color: C.textSub, letterSpacing: 1 }}>v1 네이버</span>
+              </div>
               {data.naverCategories.map((c, i) => (
-                <div key={c.label} style={{ marginBottom: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                    <span style={{ fontFamily: SANS, fontSize: 12, color: C.textSub }}>{c.label}</span>
-                    <span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, color: i === 0 ? C.positive : C.muted }}>{c.ratio}%</span>
+                <div key={c.label} style={{ marginBottom: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}>
+                    <span style={{ fontSize: 13, color: i === 0 ? C.text : C.textSub, fontWeight: i === 0 ? 700 : 400 }}>{c.label}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: i === 0 ? C.primary : C.textSub }}>{c.ratio}%</span>
                   </div>
-                  <div style={{ height: 5, background: C.border, borderRadius: 2 }}>
-                    <div style={{ height: '100%', width: `${c.ratio}%`, background: i === 0 ? C.positive : C.muted + '55', borderRadius: 2 }} />
+                  <div style={{ height: 7, background: '#f3f4f6', borderRadius: 4 }}>
+                    <div style={{ height: '100%', width: `${Math.min(c.ratio, 100)}%`, background: i === 0 ? C.primary : `${C.mildGreen}88`, borderRadius: 4, transition: 'width 0.6s ease' }} />
                   </div>
                 </div>
               ))}
+              {data.naverCategories.length === 0 && (
+                <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 13, color: '#9ca3af' }}>데이터 로딩 중...</div>
+              )}
             </div>
-            <div style={{ background: C.primary, padding: '22px 20px', flex: 1 }}>
-              <div style={{ fontFamily: MONO, fontSize: 9, color: 'rgba(255,255,255,0.4)', letterSpacing: 2, marginBottom: 14 }}>이번 주 딱 하나</div>
-              <p style={{ fontFamily: SANS, fontSize: 22, fontWeight: 700, color: '#fff', lineHeight: 1.35, margin: '0 0 12px' }}>오늘 점심,<br />밖에서 먹기</p>
-              <p style={{ fontFamily: SANS, fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.75, margin: 0 }}>식후 10분 걷기 = 코르티솔 23% 감소.<br />밥 먹으면서 화면 보지 않는 것만으로도 뇌가 쉽니다.</p>
-              <div style={{ marginTop: 14, background: 'rgba(255,255,255,0.1)', borderRadius: 6, padding: '10px 14px' }}>
-                <div style={{ fontFamily: MONO, fontSize: 9, color: 'rgba(255,255,255,0.5)', letterSpacing: 1, marginBottom: 4 }}>UBIST 실시간 처방 데이터</div>
-                <p style={{ fontFamily: SANS, fontSize: 12, color: 'rgba(255,255,255,0.85)', margin: 0, lineHeight: 1.7 }}>
-                  항우울제·수면유도제 처방 전주 대비 <strong style={{ color: '#fff' }}>+18% 동반 상승</strong> 중
-                </p>
+
+            <div style={{ background: C.deepBlue, borderRadius: 16, padding: '24px 28px', flex: 1, boxShadow: '0 1px 6px rgba(0,0,0,0.1)' }}>
+              <div style={{ fontSize: 10, color: C.brightGreen, letterSpacing: 3, marginBottom: 14, fontWeight: 700 }}>GC 지씨케어 전문의</div>
+              <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.78)', lineHeight: 1.95, margin: '0 0 20px' }}>{EXPERT_COMMENT}</p>
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.09)', paddingTop: 14 }}>
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', letterSpacing: 1 }}>항우울제·수면유도제 처방 전주 대비 <strong style={{ color: 'rgba(255,255,255,0.55)' }}>+18%</strong> 동반 상승</div>
               </div>
-              <div style={{ marginTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 12, fontFamily: MONO, fontSize: 9, color: 'rgba(255,255,255,0.22)', letterSpacing: 1 }}>다음 주 데이터로 업데이트됩니다</div>
             </div>
           </div>
         </div>
 
-        {/* 건강 영수증 */}
-        <div style={{ background: C.surface, marginTop: 2 }}>
+        {/* ── Tags ── */}
+        <div style={{ background: C.white, borderRadius: 16, padding: '28px', marginBottom: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
+          <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 6 }}>3040이 늘 겪는 것들</div>
+          <p style={{ fontSize: 13, color: C.textSub, lineHeight: 1.6, margin: '0 0 18px' }}>
+            이번 주 실검과 겹치는 항목은 <span style={{ color: C.primary, fontWeight: 700 }}>녹색</span>으로 표시됩니다.
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {TAGS_3040.map(tag => {
+              const hi = isHighlight(tag);
+              return (
+                <span key={tag} style={{ fontSize: 13, fontWeight: hi ? 700 : 400, color: hi ? C.primary : C.textSub, background: hi ? '#f0faf4' : '#f9fafb', border: `1.5px solid ${hi ? C.primary : C.border}`, borderRadius: 24, padding: '7px 16px' }}>
+                  {hi && '● '}{tag}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── Receipt section ── */}
+        <div style={{ background: C.white, borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
+          {/* receipt header bar */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', borderBottom: `2px solid ${C.primary}` }}>
-            <div style={{ padding: '20px 24px' }}>
-              <div style={{ fontFamily: MONO, fontSize: 9, color: C.muted, letterSpacing: 2, marginBottom: 6 }}>건강 영수증 · HEALTH RECEIPT</div>
-              <div style={{ fontFamily: SANS, fontSize: 17, fontWeight: 700, color: C.text }}>이번 주 나의 건강 청구서</div>
+            <div style={{ padding: '22px 28px' }}>
+              <div style={{ fontSize: 10, color: C.textSub, letterSpacing: 2, marginBottom: 6 }}>건강 영수증 · HEALTH RECEIPT</div>
+              <div style={{ fontSize: 17, fontWeight: 800 }}>이번 주 나의 건강 청구서</div>
             </div>
-            <div style={{ background: C.accent, padding: '20px 28px', display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'right' }}>
-              <div style={{ fontFamily: MONO, fontSize: 9, color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>대한민국 직장인 평균</div>
-              <div style={{ fontFamily: MONO, fontSize: 26, fontWeight: 700, color: '#fff' }}>-38,500원</div>
+            <div style={{ background: C.deepBlue, padding: '22px 36px', display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'right' }}>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', marginBottom: 4 }}>대한민국 직장인 평균</div>
+              <div style={{ fontSize: 34, fontWeight: 900, color: C.yellow }}>-38,500원</div>
             </div>
           </div>
-          <div style={{ padding: '24px' }}>
-            <button onClick={() => setReceiptOpen(!receiptOpen)} style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 12px', display: 'flex', justifyContent: 'space-between', borderBottom: `1px dashed ${C.border}`, marginBottom: 16 }}>
-              <span style={{ fontFamily: MONO, fontSize: 10, color: C.muted, letterSpacing: 1 }}>국민 평균 청구 내역 {receiptOpen ? '▲ 접기' : '▼ 펼치기'}</span>
-            </button>
-            {receiptOpen && (
-              <div style={{ marginBottom: 16 }}>
-                {STATIC.receiptItems.map((item, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: `1px dashed ${C.border}` }}>
-                    <span style={{ fontFamily: SANS, fontSize: 13, color: C.textSub }}>{item.emoji} {item.label}</span>
-                    <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: C.accentDark }}>{fmt(item.amount)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div style={{ fontFamily: MONO, fontSize: 9, color: C.muted, letterSpacing: 2, marginBottom: 14 }}>나의 영수증 — 상단 키워드 체크 시 반영</div>
-            {hasChecked ? (
-              <>
-                {data.keywords.filter(k => checked[k.kw]).map(item => (
-                  <div key={item.kw} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: `1px dashed ${C.border}` }}>
-                    <span style={{ fontFamily: SANS, fontSize: 13, color: C.text }}>{item.kw}</span>
-                    <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: C.accentDark }}>{fmt(-(10 - item.rank + 1) * 1000)}</span>
-                  </div>
-                ))}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 16, borderTop: `2px solid ${C.primary}` }}>
-                  <span style={{ fontFamily: MONO, fontSize: 11, color: C.muted }}>나의 총액</span>
-                  <span style={{ fontFamily: MONO, fontSize: 32, fontWeight: 700, color: C.accentDark }}>{fmt(myTotal)}</span>
+
+          {/* 2-col body */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+
+            {/* LEFT: my receipt */}
+            <div style={{ padding: '28px', borderRight: `1px solid ${C.border}` }}>
+              <button
+                onClick={() => setReceiptOpen(p => !p)}
+                style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', paddingBottom: 14, borderBottom: `1px dashed ${C.border}`, marginBottom: 20 }}
+              >
+                <span style={{ fontSize: 11, color: C.textSub, letterSpacing: 1 }}>국민 평균 청구 내역 {receiptOpen ? '▲' : '▼'}</span>
+              </button>
+
+              {receiptOpen && (
+                <div style={{ marginBottom: 20 }}>
+                  {RECEIPT_ITEMS.map((item, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px dashed ${C.border}` }}>
+                      <span style={{ fontSize: 13, color: C.textSub }}>{item.emoji} {item.label}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: C.red }}>{fmt(item.amount)}</span>
+                    </div>
+                  ))}
                 </div>
-              </>
-            ) : (
-              <div style={{ padding: '28px 0', textAlign: 'center', fontFamily: SANS, fontSize: 13, color: C.border, lineHeight: 1.7 }}>
-                상단 키워드를 체크하면<br />나의 영수증이 완성됩니다
+              )}
+
+              <div style={{ fontSize: 10, color: C.textSub, letterSpacing: 2, marginBottom: 18 }}>나의 영수증 — 상단 키워드 체크 시 반영</div>
+
+              {hasChecked ? (
+                <>
+                  {checkedKws.map(item => (
+                    <div key={item.kw} style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 0', borderBottom: `1px dashed ${C.border}` }}>
+                      <span style={{ fontSize: 14, color: C.text }}>{item.kw}</span>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: C.red }}>{fmt(-(11 - item.rank) * 1000)}</span>
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 22, paddingTop: 22, borderTop: `2px solid ${C.primary}` }}>
+                    <span style={{ fontSize: 12, color: C.textSub }}>나의 총액</span>
+                    <span style={{ fontSize: 48, fontWeight: 900, color: C.deepBlue, letterSpacing: '-1px' }}>{fmt(myTotal)}</span>
+                  </div>
+                </>
+              ) : (
+                <div style={{ padding: '36px 0', textAlign: 'center', fontSize: 14, color: '#d1d5db', lineHeight: 1.8 }}>
+                  상단 키워드를 체크하면<br />나의 영수증이 완성됩니다
+                </div>
+              )}
+            </div>
+
+            {/* RIGHT: TOP4 alert */}
+            <div style={{ padding: '28px' }}>
+              <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 20 }}>이번 주 TOP4 건강 경보</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {(top4.length > 0 ? top4 : [
+                  { rank: 1, kw: '기침 가슴통증',  trend: 'up',   related: [] },
+                  { rank: 2, kw: '우울증과불면증', trend: 'same', related: [] },
+                  { rank: 3, kw: '당뇨 식단',      trend: 'new',  related: [] },
+                  { rank: 4, kw: '수면무호흡증',   trend: 'new',  related: [] },
+                ]).map((item, i) => {
+                  const rankColors = [C.red, C.mildBlue, C.primary, C.mildGreen];
+                  const notes = [
+                    '3월 환절기 호흡기 집중 주의',
+                    '병행 검색 → 동반 발현 신호',
+                    '식이 관리 관심 급등',
+                    '중년 남성 집중 발생',
+                  ];
+                  return (
+                    <div key={item.rank} style={{ display: 'flex', gap: 14, alignItems: 'flex-start', padding: '16px', background: '#f9fafb', borderRadius: 12, border: `1px solid ${C.border}` }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 9, background: rankColors[i] ?? C.primary, color: '#fff', fontSize: 14, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{item.rank}</div>
+                      <div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4 }}>{item.kw}</div>
+                        <div style={{ fontSize: 12, color: C.textSub, lineHeight: 1.5 }}>{notes[i]}</div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            )}
+            </div>
           </div>
         </div>
 
-        <div style={{ background: C.primary, padding: '14px 24px', display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
-          <span style={{ fontFamily: MONO, fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>GC HEALTH WEEKLY · {data.week}</span>
-          <span style={{ fontFamily: MONO, fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>DATA: v1 · v3 · Claude AI</span>
+        {/* ── Footer ── */}
+        <div style={{ background: C.deepBlue, borderRadius: 14, padding: '16px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>GC HEALTH WEEKLY · {data.week}</span>
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>DATA: v1 · v3 · Claude AI</span>
         </div>
       </main>
     </div>

@@ -1,259 +1,507 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { PageData } from '../lib/fetchHealthData';
 
-const FONT_LINK = 'https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Space+Mono:wght@400;700&display=swap';
 const SANS = "'Noto Sans KR', sans-serif";
-const MONO = "'Space Mono', monospace";
 
+const C = {
+  primary:     '#0072CE',
+  secondary:   '#00A9E0',
+  deepBlue:    '#002B49',
+  yellow:      '#FFC845',
+  brightGreen: '#97D700',
+  mildGreen:   '#43B02A',
+  red:         '#E4002B',
+  bg:          '#f0f4f8',
+  white:       '#ffffff',
+  text:        '#111827',
+  textSub:     '#6b7280',
+  border:      '#e5e7eb',
+};
+
+/* ─── Static data ─── */
 const TAGS_20S = [
   '피부 트러블', '수면 부족', '다이어트 강박',
   '번아웃', '탈모 시작', '소화 문제',
   '눈 피로', '불안·우울', '허리 통증',
 ];
 
-const SUBJECTS = [
-  { id: 'skin',     icon: '✨', name: '피부·외모',  score: 58, grade: 'D+', comment: '피부 트러블 검색 급등. 수분 공급부터 시작하세요.' },
-  { id: 'diet',     icon: '🥗', name: '다이어트',    score: 82, grade: 'B',  comment: '다이어트 관심도 상위권. 요요 주의 필요해요.' },
-  { id: 'sleep',    icon: '😴', name: '수면',        score: 41, grade: 'F',  comment: '불면증 검색 급증. 갓생의 치명적 구멍이에요.' },
-  { id: 'mental',   icon: '🧠', name: '멘탈',        score: 63, grade: 'C',  comment: '우울감 검색 꾸준히 유지. 혼자 버티지 마세요.' },
-  { id: 'exercise', icon: '💪', name: '운동',        score: 88, grade: 'B+', comment: '헬스·운동 관심 1위. 이번 주 가장 잘하는 과목.' },
-];
-
-const AI_COMMENT = '이번 주 20대 검색 1위는 피부 트러블이에요. 다이어트·운동 관심은 높은데 수면 점수가 바닥이에요. 갓생을 살고 싶은데 몸이 안 따라오는 거예요.';
+const AI_COMMENT    = '이번 주 20대 검색 1위는 피부 트러블이에요. 다이어트·운동 관심은 높은데 수면 점수가 바닥이에요. 갓생을 살고 싶은데 몸이 안 따라오는 거예요.';
 const EXPERT_COMMENT = '수면 부족이 피부 트러블과 우울감을 동시에 악화시킵니다. 이번 주 20대 데이터에서 세 지표가 동시에 상위권에 진입한 것은 생활 리듬 붕괴의 전형적인 신호입니다.';
 
-const TREND_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  up:   { label: '▲ 급등', color: '#E4002B', bg: '#fce8eb' },
-  new:  { label: 'NEW',    color: '#059669',  bg: '#ecfdf5' },
-  down: { label: '▼',      color: '#6366f1',  bg: '#eef2ff' },
-  same: { label: '—',      color: '#9ca3af',  bg: '#f8f7ff' },
-};
+const NATIONAL_AVG_GPA = 56; // (48+62+41+55+74)/5
 
-function gradeStyle(grade: string) {
-  if (grade.startsWith('A')) return { color: '#059669', bg: '#ecfdf5' };
-  if (grade.startsWith('B')) return { color: '#2563eb', bg: '#eff6ff' };
-  if (grade.startsWith('C')) return { color: '#d97706', bg: '#fffbeb' };
-  return { color: '#E4002B', bg: '#fef2f2' };
+interface Action {
+  id:        string;
+  label:     string;
+  bonus:     number;
+  gcProduct?: { name: string };
+}
+interface Subject {
+  id:      string;
+  icon:    string;
+  name:    string;
+  avg:     number;
+  comment: string;
+  actions: Action[];
 }
 
-function SectionLabel({ text, source }: { text: string; source?: string }) {
-  return (
-    <div style={{ borderBottom: '2px solid #5b21b6', paddingBottom: 10, marginBottom: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-      <span style={{ fontFamily: SANS, fontSize: 15, fontWeight: 800, color: '#1e1b4b' }}>{text}</span>
-      {source && <span style={{ fontFamily: MONO, fontSize: 9, color: '#9ca3af', letterSpacing: 1 }}>{source}</span>}
-    </div>
-  );
+const SUBJECTS: Subject[] = [
+  {
+    id: 'skin', icon: '✨', name: '피부·외모', avg: 48,
+    comment: '피부 트러블 검색 급등. 수분 공급부터 시작하세요.',
+    actions: [
+      { id: 'skin_1', label: '자외선차단제 매일 바르기',  bonus: 8 },
+      { id: 'skin_2', label: '하루 1.5L 수분 섭취',      bonus: 7 },
+      { id: 'skin_3', label: '세안 후 보습 루틴 지키기',  bonus: 6, gcProduct: { name: 'GC녹십자 피부 수분 앰플' } },
+      { id: 'skin_4', label: '당류 섭취 줄이기',          bonus: 5 },
+    ],
+  },
+  {
+    id: 'diet', icon: '🥗', name: '다이어트', avg: 62,
+    comment: '다이어트 관심도 상위권. 요요 주의가 필요해요.',
+    actions: [
+      { id: 'diet_1', label: '아침 식사 거르지 않기',    bonus: 8 },
+      { id: 'diet_2', label: '식사 20분 천천히 먹기',    bonus: 7 },
+      { id: 'diet_3', label: '단백질 보충제 섭취',       bonus: 6, gcProduct: { name: 'GC웰피스 단백질 쉐이크' } },
+      { id: 'diet_4', label: '야식 11시 이후 금지',      bonus: 5 },
+    ],
+  },
+  {
+    id: 'sleep', icon: '😴', name: '수면', avg: 41,
+    comment: '불면증 검색 급증. 갓생의 치명적 구멍이에요.',
+    actions: [
+      { id: 'sleep_1', label: '취침 1시간 전 스마트폰 끄기', bonus: 10 },
+      { id: 'sleep_2', label: '7시간 이상 수면 확보',        bonus: 10 },
+      { id: 'sleep_3', label: '수면 보조제 활용',            bonus: 6, gcProduct: { name: 'GC녹십자 멜라토닌 수면건강' } },
+      { id: 'sleep_4', label: '일정한 기상 시간 유지',       bonus: 8 },
+    ],
+  },
+  {
+    id: 'mental', icon: '🧠', name: '멘탈', avg: 55,
+    comment: '우울감 검색 꾸준히 유지. 혼자 버티지 마세요.',
+    actions: [
+      { id: 'mental_1', label: '하루 10분 명상·호흡',    bonus: 8 },
+      { id: 'mental_2', label: '감사일기 3줄 쓰기',      bonus: 7 },
+      { id: 'mental_3', label: '오메가3 꾸준히 섭취',    bonus: 5, gcProduct: { name: 'GC녹십자 오메가3' } },
+      { id: 'mental_4', label: '주 1회 자연 속 걷기',    bonus: 8 },
+    ],
+  },
+  {
+    id: 'exercise', icon: '💪', name: '운동', avg: 74,
+    comment: '헬스·운동 관심 1위. 이번 주 가장 잘하는 과목.',
+    actions: [
+      { id: 'ex_1', label: '주 3회 이상 유산소 운동', bonus: 10 },
+      { id: 'ex_2', label: '하루 8천보 걷기',         bonus: 8 },
+      { id: 'ex_3', label: '근력 운동 주 2회',        bonus: 8 },
+      { id: 'ex_4', label: '운동 후 단백질 보충',     bonus: 6, gcProduct: { name: 'GC웰피스 BCAA' } },
+    ],
+  },
+];
+
+const TREND: Record<string, { label: string; color: string; bg: string }> = {
+  up:   { label: '▲ 급등', color: C.red,      bg: '#fce8eb' },
+  new:  { label: 'NEW',    color: C.mildGreen, bg: '#edfce8' },
+  down: { label: '▼',      color: C.primary,   bg: '#e8f1fc' },
+  same: { label: '—',      color: '#9ca3af',   bg: '#f3f4f6' },
+};
+
+function gradeFromScore(s: number) {
+  if (s >= 90) return { grade: 'A+', color: '#059669', bg: '#ecfdf5' };
+  if (s >= 80) return { grade: 'A',  color: '#059669', bg: '#ecfdf5' };
+  if (s >= 70) return { grade: 'B+', color: C.primary, bg: '#eff6ff' };
+  if (s >= 60) return { grade: 'B',  color: C.primary, bg: '#eff6ff' };
+  if (s >= 50) return { grade: 'C',  color: '#d97706', bg: '#fffbeb' };
+  if (s >= 40) return { grade: 'D',  color: C.red,     bg: '#fef2f2' };
+  return              { grade: 'F',  color: C.red,     bg: '#fef2f2' };
 }
 
 export default function DashboardClient({ data }: { data: PageData }) {
-  const [checked, setChecked] = useState<Record<string, boolean>>({});
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [scoreOpen, setScoreOpen] = useState(false);
+  const [loaded,   setLoaded]   = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [kwChecked, setKwChecked] = useState<Record<string, boolean>>({});
+  const [expanded,  setExpanded]  = useState<string | null>(null);
+  const [actions,   setActions]   = useState<Record<string, boolean>>({});
+
   useEffect(() => {
-    const l = document.createElement('link');
-    l.rel = 'stylesheet'; l.href = FONT_LINK;
-    document.head.appendChild(l);
-    return () => { document.head.removeChild(l); };
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap';
+    document.head.appendChild(link);
+
+    let p = 0;
+    const iv = setInterval(() => {
+      p += Math.random() * 18 + 6;
+      if (p >= 100) {
+        p = 100;
+        clearInterval(iv);
+        setTimeout(() => setLoaded(true), 250);
+      }
+      setProgress(Math.min(p, 100));
+    }, 70);
+
+    return () => { clearInterval(iv); document.head.removeChild(link); };
   }, []);
 
-  const toggle = (kw: string) => setChecked(p => ({ ...p, [kw]: !p[kw] }));
-  const hasChecked = Object.values(checked).some(Boolean);
-  const checkedSubjects = SUBJECTS.filter(s => checked[s.id]);
-  const myGpa = checkedSubjects.length > 0
-    ? (checkedSubjects.reduce((s, sub) => s + sub.score, 0) / checkedSubjects.length).toFixed(1)
-    : null;
-  const kwSet = new Set(data.keywords.map(k => k.kw.replace(/·.*/, '')));
-  const isHighlight = (tag: string) => [...kwSet].some(k => tag.includes(k) || k.includes(tag.replace(/·.*/, '')));
+  const toggleKw     = (kw: string) => setKwChecked(p => ({ ...p, [kw]: !p[kw] }));
+  const toggleAction = (id: string) => setActions(p => ({ ...p, [id]: !p[id] }));
 
+  /* Scores */
+  const subjectScores = useMemo(() =>
+    SUBJECTS.map(sub => {
+      const bonus = sub.actions
+        .filter(a => actions[a.id])
+        .reduce((s, a) => s + a.bonus, 0);
+      return { ...sub, score: Math.min(100, sub.avg + bonus) };
+    }),
+    [actions]
+  );
+
+  const myGpa      = Math.round(subjectScores.reduce((s, sub) => s + sub.score, 0) / SUBJECTS.length);
+  const gpaVsAvg   = myGpa - NATIONAL_AVG_GPA;
+  const weakest    = [...subjectScores].sort((a, b) => a.score - b.score)[0];
+
+  const kwSet       = new Set(data.keywords.map(k => k.kw));
+  const isHighlight = (tag: string) =>
+    [...kwSet].some(k => tag.includes(k.slice(0, 2)) || k.includes(tag.slice(0, 2)));
+
+  /* ─── Loading screen ─── */
+  if (!loaded) {
+    return (
+      <div style={{ minHeight: '100vh', background: C.deepBlue, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: SANS }}>
+        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', letterSpacing: 5, marginBottom: 28 }}>GC HEALTH WEEKLY</div>
+        <div style={{ fontSize: 32, fontWeight: 900, color: '#fff', marginBottom: 6 }}>갓생 성적표</div>
+        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 48 }}>20대 주간 건강 리포트</div>
+        <div style={{ width: 240, height: 5, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${progress}%`, background: `linear-gradient(90deg, ${C.primary}, ${C.secondary})`, borderRadius: 3, transition: 'width 0.08s linear' }} />
+        </div>
+        <div style={{ marginTop: 14, fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>데이터 로딩 중...</div>
+      </div>
+    );
+  }
+
+  const { grade: myGrade, color: myGradeColor, bg: myGradeBg } = gradeFromScore(myGpa);
+
+  /* ─── Main render ─── */
   return (
-    <div style={{ minHeight: '100vh', background: '#ffffff', fontFamily: SANS, color: '#1e1b4b' }}>
-      <header style={{ background: '#5b21b6' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 28px', borderBottom: '1px solid rgba(255,255,255,0.15)' }}>
-          <span style={{ fontFamily: MONO, fontSize: 10, color: 'rgba(255,255,255,0.5)', letterSpacing: 2 }}>{data.date}</span>
-          <div style={{ display: 'flex', gap: 20 }}>
+    <div style={{ minHeight: '100vh', background: C.bg, fontFamily: SANS, color: C.text, animation: 'gcFadeIn 0.4s ease' }}>
+      <style>{`@keyframes gcFadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}`}</style>
+
+      {/* ── Nav ── */}
+      <nav style={{ background: C.deepBlue, position: 'sticky', top: 0, zIndex: 50, boxShadow: '0 2px 12px rgba(0,0,0,0.25)' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 54 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 30, height: 30, background: C.primary, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ color: '#fff', fontSize: 11, fontWeight: 900 }}>GC</span>
+            </div>
+            <span style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>Health Weekly</span>
+          </div>
+          <div style={{ display: 'flex', gap: 28 }}>
             {['주간리포트', '20대', '건강트렌드'].map(t => (
-              <span key={t} style={{ fontFamily: MONO, fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>{t}</span>
+              <span key={t} style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>{t}</span>
             ))}
           </div>
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>{data.date}</span>
         </div>
-        <div style={{ textAlign: 'center', padding: '32px 28px 24px' }}>
-          <div style={{ fontFamily: MONO, fontSize: 10, color: 'rgba(255,255,255,0.5)', letterSpacing: 5, marginBottom: 12 }}>GC HEALTH WEEKLY</div>
-          <h1 style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(36px, 5vw, 58px)', color: '#fff', margin: '0 0 10px', letterSpacing: '-1px', lineHeight: 1 }}>
+      </nav>
+
+      {/* ── Header ── */}
+      <header style={{ background: C.deepBlue }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '52px 32px 40px' }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.yellow, background: 'rgba(255,200,69,0.14)', borderRadius: 5, padding: '4px 12px', letterSpacing: 0.5 }}>20대</span>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', background: 'rgba(255,255,255,0.07)', borderRadius: 5, padding: '4px 12px' }}>{data.week}</span>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', background: 'rgba(255,255,255,0.07)', borderRadius: 5, padding: '4px 12px' }}>{data.vol}</span>
+          </div>
+          <h1 style={{ fontSize: 'clamp(44px, 6vw, 76px)', fontWeight: 900, color: '#fff', margin: '0 0 8px', lineHeight: 1.05, letterSpacing: '-1.5px' }}>
             갓생 건강 성적표
           </h1>
-          <div style={{ width: 36, height: 2, background: '#a78bfa', margin: '0 auto 12px' }} />
-          <div style={{ fontFamily: SANS, fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
-            데이터로 읽는 20대의 한 주 · {data.week} · {data.vol}
+          <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.4)', margin: '0 0 36px' }}>
+            데이터로 읽는 20대의 한 주
+          </p>
+          <div style={{ background: 'rgba(255,255,255,0.06)', borderLeft: `4px solid ${C.primary}`, borderRadius: '0 14px 14px 0', padding: '18px 22px', maxWidth: 680 }}>
+            <div style={{ fontSize: 10, color: C.secondary, letterSpacing: 3, marginBottom: 10, fontWeight: 700 }}>EDITOR</div>
+            <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.78)', lineHeight: 1.95, margin: 0 }}>{AI_COMMENT}</p>
           </div>
-        </div>
-        <div style={{ background: 'rgba(0,0,0,0.2)', padding: '16px 28px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-          <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: '#5b21b6', background: '#fff', borderRadius: 3, padding: '3px 7px', flexShrink: 0, marginTop: 2 }}>EDITOR</span>
-          <p style={{ fontFamily: SANS, fontSize: 14, color: '#ffffff', lineHeight: 1.85, margin: 0 }}>{AI_COMMENT}</p>
         </div>
       </header>
 
-      <main style={{ maxWidth: 900, margin: '0 auto', padding: '24px 40px 80px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 2, marginBottom: 2 }}>
-          {/* Left: keyword list */}
-          <div style={{ background: '#f8f7ff', padding: '24px' }}>
-            <SectionLabel text="이번 주 건강 검색 TOP8" source="v3 실시간" />
-            {data.keywords.map((item) => {
-              const tr = TREND_CONFIG[item.trend];
+      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 32px 80px' }}>
+
+        {/* ── 3 stat cards ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 20 }}>
+          {[
+            { label: '이번 주 실검 1위', value: data.topKeyword || '피부 트러블', sub: '20대 건강 검색', accent: C.primary },
+            { label: '20대 평균 수면', value: '5.8h', sub: '권장치 -1.2h', accent: C.secondary },
+            {
+              label: '네이버 건강 관심 1위',
+              value: `${data.naverCategories[0]?.ratio ?? 42.8}%`,
+              sub: data.naverCategories[0]?.label ?? '건강검진',
+              accent: C.mildGreen,
+            },
+          ].map((card, i) => (
+            <div key={i} style={{ background: C.white, borderRadius: 16, padding: '28px 28px 22px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
+              <div style={{ fontSize: 11, color: C.textSub, letterSpacing: 0.5, marginBottom: 14, fontWeight: 500 }}>{card.label}</div>
+              <div style={{ fontSize: 34, fontWeight: 900, color: card.accent, lineHeight: 1.1, marginBottom: 8 }}>{card.value}</div>
+              <div style={{ fontSize: 12, color: C.textSub }}>{card.sub}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── 2-col: TOP8 + right panel ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 16, marginBottom: 16 }}>
+
+          {/* LEFT: TOP8 */}
+          <div style={{ background: C.white, borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
+            <div style={{ padding: '24px 28px 16px', borderBottom: `2px solid ${C.primary}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 16, fontWeight: 800 }}>이번 주 건강 검색 TOP8</span>
+              <span style={{ fontSize: 10, color: C.textSub, letterSpacing: 1 }}>v3 실시간</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '38px 28px 1fr 80px 28px', gap: 8, padding: '9px 28px', background: '#f9fafb', borderBottom: `1px solid ${C.border}` }}>
+              {['', 'NO', '키워드', '트렌드', ''].map((h, i) => (
+                <span key={i} style={{ fontSize: 10, color: C.textSub, fontWeight: 700, textAlign: i >= 3 ? 'right' : 'left' }}>{h}</span>
+              ))}
+            </div>
+            {data.keywords.map(item => {
+              const tr    = TREND[item.trend];
               const isExp = expanded === item.kw;
               return (
-                <div key={item.kw} style={{ borderBottom: '1px solid #ede9fe' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', cursor: 'pointer' }} onClick={() => toggle(item.kw)}>
-                    <div style={{ width: 20, height: 20, borderRadius: 4, flexShrink: 0, background: checked[item.kw] ? '#5b21b6' : 'transparent', border: `2px solid ${checked[item.kw] ? '#5b21b6' : '#ede9fe'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}>
-                      {checked[item.kw] && <span style={{ color: '#fff', fontSize: 11, fontWeight: 900 }}>✓</span>}
+                <div key={item.kw} style={{ borderBottom: `1px solid ${C.border}` }}>
+                  <div
+                    style={{ display: 'grid', gridTemplateColumns: '38px 28px 1fr 80px 28px', gap: 8, alignItems: 'center', padding: '14px 28px', cursor: 'pointer', background: kwChecked[item.kw] ? '#f0f7ff' : 'transparent', transition: 'background 0.15s' }}
+                    onClick={() => toggleKw(item.kw)}
+                  >
+                    <div style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${kwChecked[item.kw] ? C.primary : C.border}`, background: kwChecked[item.kw] ? C.primary : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}>
+                      {kwChecked[item.kw] && <span style={{ color: '#fff', fontSize: 11, fontWeight: 900 }}>✓</span>}
                     </div>
-                    <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: item.rank <= 3 ? '#7c3aed' : '#ede9fe', width: 22, flexShrink: 0 }}>{String(item.rank).padStart(2, '0')}</span>
-                    <span style={{ fontSize: 14, fontWeight: checked[item.kw] ? 700 : 400, color: checked[item.kw] ? '#1e1b4b' : '#6b7280', flex: 1 }}>{item.kw}</span>
-                    <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: tr.color, background: tr.bg, borderRadius: 3, padding: '2px 6px', flexShrink: 0 }}>{tr.label}</span>
-                    <button onClick={(e) => { e.stopPropagation(); setExpanded(isExp ? null : item.kw); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ede9fe', fontSize: 12, padding: 0, flexShrink: 0, transform: isExp ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s' }}>⌄</button>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: item.rank <= 3 ? C.primary : '#d1d5db' }}>{String(item.rank).padStart(2, '0')}</span>
+                    <span style={{ fontSize: 17, fontWeight: kwChecked[item.kw] ? 700 : 400, color: kwChecked[item.kw] ? C.text : '#374151' }}>{item.kw}</span>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: tr.color, background: tr.bg, borderRadius: 4, padding: '3px 8px' }}>{tr.label}</span>
+                    </div>
+                    <button
+                      onClick={e => { e.stopPropagation(); setExpanded(isExp ? null : item.kw); }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, color: C.textSub, padding: 0, transform: isExp ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
+                    >⌄</button>
                   </div>
                   {isExp && (
-                    <div style={{ padding: '6px 0 12px 52px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <span style={{ fontFamily: MONO, fontSize: 9, color: '#9ca3af', alignSelf: 'center', marginRight: 2 }}>같이 검색</span>
-                      {item.related.length > 0 ? item.related.map(r => (
-                        <span key={r} style={{ fontSize: 11, color: '#6b7280', background: '#fff', border: '1px solid #ede9fe', borderRadius: 4, padding: '3px 8px' }}>{r}</span>
-                      )) : <span style={{ fontSize: 11, color: '#9ca3af' }}>관련 검색어 없음</span>}
+                    <div style={{ padding: '10px 28px 14px 98px', display: 'flex', flexWrap: 'wrap', gap: 6, background: '#f9fafb' }}>
+                      <span style={{ fontSize: 10, color: C.textSub, alignSelf: 'center', marginRight: 4 }}>같이 검색</span>
+                      {item.related.length > 0
+                        ? item.related.map(r => (
+                            <span key={r} style={{ fontSize: 12, color: '#374151', background: C.white, border: `1px solid ${C.border}`, borderRadius: 20, padding: '4px 12px' }}>{r}</span>
+                          ))
+                        : <span style={{ fontSize: 12, color: '#9ca3af' }}>관련 검색어 없음</span>
+                      }
                     </div>
                   )}
                 </div>
               );
             })}
             {data.keywords.length === 0 && (
-              <div style={{ padding: '24px 0', textAlign: 'center', fontSize: 13, color: '#9ca3af' }}>데이터를 불러오는 중...</div>
+              <div style={{ padding: '48px 0', textAlign: 'center', fontSize: 14, color: '#9ca3af' }}>데이터 로딩 중...</div>
             )}
           </div>
 
-          {/* Right: naver categories + expert comment */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <div style={{ background: '#f8f7ff', padding: '24px', flex: '0 0 auto' }}>
-              <SectionLabel text="건강 관심사" source="v1 네이버" />
+          {/* RIGHT: naver + expert */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ background: C.white, borderRadius: 16, padding: '24px 28px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
+                <span style={{ fontSize: 16, fontWeight: 800 }}>건강 관심사</span>
+                <span style={{ fontSize: 10, color: C.textSub, letterSpacing: 1 }}>v1 네이버</span>
+              </div>
               {data.naverCategories.map((c, i) => (
-                <div key={c.label} style={{ marginBottom: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                    <span style={{ fontSize: 12, color: '#6b7280' }}>{c.label}</span>
-                    <span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, color: i === 0 ? '#7c3aed' : '#9ca3af' }}>{c.ratio}</span>
+                <div key={c.label} style={{ marginBottom: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}>
+                    <span style={{ fontSize: 13, color: i === 0 ? C.text : C.textSub, fontWeight: i === 0 ? 700 : 400 }}>{c.label}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: i === 0 ? C.primary : C.textSub }}>{c.ratio}%</span>
                   </div>
-                  <div style={{ height: 5, background: '#ede9fe', borderRadius: 2 }}>
-                    <div style={{ height: '100%', width: `${Math.min(c.ratio, 100)}%`, background: i === 0 ? '#7c3aed' : '#a78bfa88', borderRadius: 2 }} />
+                  <div style={{ height: 7, background: '#f3f4f6', borderRadius: 4 }}>
+                    <div style={{ height: '100%', width: `${Math.min(c.ratio, 100)}%`, background: i === 0 ? C.primary : `${C.secondary}88`, borderRadius: 4, transition: 'width 0.6s ease' }} />
                   </div>
                 </div>
               ))}
+              {data.naverCategories.length === 0 && (
+                <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 13, color: '#9ca3af' }}>데이터 로딩 중...</div>
+              )}
             </div>
-            <div style={{ background: '#5b21b6', padding: '22px 20px', flex: 1 }}>
-              <div style={{ fontFamily: MONO, fontSize: 9, color: '#a78bfa', letterSpacing: 2, marginBottom: 12 }}>GC 지씨케어 전문의 코멘트</div>
-              <p style={{ fontSize: 13, color: '#ffffff', lineHeight: 1.85, margin: '0 0 16px', fontWeight: 400 }}>{EXPERT_COMMENT}</p>
-              <div style={{ borderTop: '1px solid rgba(255,255,255,0.15)', paddingTop: 12, fontFamily: MONO, fontSize: 9, color: '#a78bfa', letterSpacing: 1 }}>
-                내부 데이터 연동 시 UBIST 처방 통계 추가 예정
+
+            <div style={{ background: C.deepBlue, borderRadius: 16, padding: '24px 28px', flex: 1, boxShadow: '0 1px 6px rgba(0,0,0,0.1)' }}>
+              <div style={{ fontSize: 10, color: C.secondary, letterSpacing: 3, marginBottom: 14, fontWeight: 700 }}>GC 지씨케어 전문의</div>
+              <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.78)', lineHeight: 1.95, margin: '0 0 20px' }}>{EXPERT_COMMENT}</p>
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.09)', paddingTop: 14 }}>
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', letterSpacing: 1 }}>내부 데이터 연동 시 UBIST 처방 통계 추가 예정</div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Tags section */}
-        <div style={{ background: '#f8f7ff', padding: '24px', marginBottom: 2 }}>
-          <SectionLabel text="20대가 늘 겪는 것들" />
-          <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7, margin: '0 0 16px' }}>
-            이번 주 실검과 겹치는 항목은 <span style={{ color: '#7c3aed', fontWeight: 700 }}>보라색</span>으로 표시됩니다.
+        {/* ── Tags ── */}
+        <div style={{ background: C.white, borderRadius: 16, padding: '28px', marginBottom: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
+          <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 6 }}>20대가 늘 겪는 것들</div>
+          <p style={{ fontSize: 13, color: C.textSub, lineHeight: 1.6, margin: '0 0 18px' }}>
+            이번 주 실검과 겹치는 항목은 <span style={{ color: C.primary, fontWeight: 700 }}>파란색</span>으로 표시됩니다.
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {TAGS_20S.map(tag => {
               const hi = isHighlight(tag);
               return (
-                <span key={tag} style={{ fontSize: 13, fontWeight: hi ? 700 : 400, color: hi ? '#7c3aed' : '#6b7280', background: hi ? '#ede9fe' : '#fff', border: `1.5px solid ${hi ? '#7c3aed' : '#ede9fe'}`, borderRadius: 20, padding: '6px 14px' }}>
-                  {hi && <span style={{ marginRight: 4 }}>●</span>}{tag}
+                <span key={tag} style={{ fontSize: 13, fontWeight: hi ? 700 : 400, color: hi ? C.primary : C.textSub, background: hi ? '#eff6ff' : '#f9fafb', border: `1.5px solid ${hi ? C.primary : C.border}`, borderRadius: 24, padding: '7px 16px' }}>
+                  {hi && '● '}{tag}
                 </span>
               );
             })}
           </div>
         </div>
 
-        {/* Score section */}
-        <div style={{ background: '#f8f7ff' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', borderBottom: '2px solid #5b21b6' }}>
-            <div style={{ padding: '20px 24px' }}>
-              <div style={{ fontFamily: MONO, fontSize: 9, color: '#9ca3af', letterSpacing: 2, marginBottom: 6 }}>갓생 성적표 · HEALTH REPORT CARD</div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: '#1e1b4b' }}>이번 주 나의 갓생 성적표</div>
+        {/* ── Scorecard ── */}
+        <div style={{ background: C.white, borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
+          {/* scorecard header */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', borderBottom: `2px solid ${C.primary}` }}>
+            <div style={{ padding: '22px 28px' }}>
+              <div style={{ fontSize: 10, color: C.textSub, letterSpacing: 2, marginBottom: 6 }}>갓생 성적표 · HEALTH REPORT CARD</div>
+              <div style={{ fontSize: 17, fontWeight: 800 }}>이번 주 나의 갓생 성적표</div>
             </div>
-            <div style={{ background: '#7c3aed', padding: '20px 28px', display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'right' }}>
-              <div style={{ fontFamily: MONO, fontSize: 9, color: 'rgba(255,255,255,0.7)', marginBottom: 4 }}>이번 주 건강 적신호</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#ffffff' }}>
-                {data.keywords.slice(0, 3).map(k => k.kw).join(' · ')}
+            <div style={{ background: C.deepBlue, padding: '22px 36px', display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'right' }}>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', marginBottom: 4 }}>이번 주 건강 적신호</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>
+                {data.keywords.slice(0, 3).map(k => k.kw).join(' · ') || '데이터 로딩 중'}
               </div>
             </div>
           </div>
-          <div style={{ padding: '24px' }}>
-            <button onClick={() => setScoreOpen(!scoreOpen)} style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 12px', display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #ede9fe', marginBottom: 16 }}>
-              <span style={{ fontFamily: MONO, fontSize: 10, color: '#9ca3af', letterSpacing: 1 }}>
-                과목별 성적 {scoreOpen ? '▲ 접기' : '▼ 펼치기'}
-              </span>
-            </button>
-            {scoreOpen && (
-              <div style={{ marginBottom: 16 }}>
-                {SUBJECTS.map((sub, i) => {
-                  const gs = gradeStyle(sub.grade);
-                  const isExp = expanded === sub.id;
-                  return (
-                    <div key={sub.id} style={{ borderBottom: i < SUBJECTS.length - 1 ? '1px dashed #ede9fe' : 'none' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', cursor: 'pointer' }} onClick={() => setExpanded(isExp ? null : sub.id)}>
-                        <span style={{ fontSize: 16, flexShrink: 0 }}>{sub.icon}</span>
-                        <span style={{ fontSize: 13, color: '#6b7280', flex: 1 }}>{sub.name}</span>
-                        <div style={{ height: 4, width: 80, background: '#ede9fe', borderRadius: 2, flexShrink: 0 }}>
-                          <div style={{ height: '100%', width: `${sub.score}%`, background: gs.color, borderRadius: 2 }} />
-                        </div>
-                        <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: '#1e1b4b', width: 28, textAlign: 'right', flexShrink: 0 }}>{sub.score}</span>
-                        <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: gs.color, background: gs.bg, borderRadius: 4, padding: '2px 7px', flexShrink: 0 }}>{sub.grade}</span>
-                      </div>
-                      {isExp && (
-                        <div style={{ background: gs.bg, borderLeft: `3px solid ${gs.color}`, margin: '0 0 10px 26px', padding: '10px 14px', borderRadius: '0 8px 8px 0' }}>
-                          <p style={{ fontSize: 12, color: '#1e1b4b', lineHeight: 1.75, margin: 0 }}>{sub.comment}</p>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            <div style={{ fontFamily: MONO, fontSize: 9, color: '#9ca3af', letterSpacing: 2, marginBottom: 14 }}>나의 갓생 점수 — 과목 체크 시 반영</div>
-            {hasChecked && myGpa ? (
-              <>
-                {checkedSubjects.map(sub => {
-                  const gs = gradeStyle(sub.grade);
-                  return (
-                    <div key={sub.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px dashed #ede9fe' }}>
-                      <span style={{ fontSize: 13, color: '#1e1b4b' }}>{sub.icon} {sub.name}</span>
-                      <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: gs.color, background: gs.bg, borderRadius: 4, padding: '2px 8px' }}>{sub.grade}</span>
-                    </div>
-                  );
-                })}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 16, borderTop: '2px solid #5b21b6' }}>
-                  <span style={{ fontFamily: MONO, fontSize: 11, color: '#9ca3af' }}>나의 GPA</span>
-                  <div style={{ textAlign: 'right' }}>
-                    <span style={{ fontFamily: MONO, fontSize: 32, fontWeight: 700, color: '#7c3aed' }}>{myGpa}</span>
-                    <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 0' }}>
-                      {parseFloat(myGpa) >= 80 ? '🎉 갓생 인증! 이 루틴 유지하세요.'
-                        : parseFloat(myGpa) >= 60 ? '😐 절반의 갓생. 수면부터 챙기세요.'
-                        : '🚨 갓생 위기. 딱 하나만 고쳐볼까요?'}
-                    </p>
-                  </div>
+
+          <div style={{ padding: '28px' }}>
+            {/* GPA summary: 3 cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 28 }}>
+              {/* My GPA */}
+              <div style={{ background: myGradeBg, borderRadius: 14, padding: '22px', border: `2px solid ${myGradeColor}22` }}>
+                <div style={{ fontSize: 11, color: C.textSub, marginBottom: 12, fontWeight: 500 }}>나의 GPA</div>
+                <div style={{ fontSize: 48, fontWeight: 900, color: myGradeColor, lineHeight: 1, marginBottom: 6 }}>{myGpa}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: myGradeColor, background: '#fff', borderRadius: 6, padding: '3px 10px' }}>{myGrade}</span>
+                  <span style={{ fontSize: 11, color: C.textSub }}>
+                    {myGpa >= 80 ? '🎉 갓생 인증!' : myGpa >= 60 ? '😐 절반의 갓생' : '🚨 갓생 위기'}
+                  </span>
                 </div>
-              </>
-            ) : (
-              <div style={{ padding: '24px 0', textAlign: 'center', fontSize: 13, color: '#ede9fe', lineHeight: 1.7 }}>
-                과목을 체크하면<br />나의 갓생 점수가 계산됩니다
               </div>
-            )}
+              {/* vs avg */}
+              <div style={{ background: gpaVsAvg >= 0 ? '#f0fdf4' : '#fef2f2', borderRadius: 14, padding: '22px', border: `2px solid ${gpaVsAvg >= 0 ? C.mildGreen : C.red}22` }}>
+                <div style={{ fontSize: 11, color: C.textSub, marginBottom: 12, fontWeight: 500 }}>전국 평균 대비</div>
+                <div style={{ fontSize: 48, fontWeight: 900, color: gpaVsAvg >= 0 ? C.mildGreen : C.red, lineHeight: 1, marginBottom: 6 }}>
+                  {gpaVsAvg >= 0 ? '+' : ''}{gpaVsAvg}
+                </div>
+                <div style={{ fontSize: 12, color: C.textSub }}>전국 평균 {NATIONAL_AVG_GPA}점</div>
+              </div>
+              {/* weakest */}
+              <div style={{ background: '#fff7ed', borderRadius: 14, padding: '22px', border: '2px solid #fed7aa' }}>
+                <div style={{ fontSize: 11, color: C.textSub, marginBottom: 12, fontWeight: 500 }}>가장 약한 과목</div>
+                <div style={{ fontSize: 34, fontWeight: 900, color: '#ea580c', lineHeight: 1.1, marginBottom: 6 }}>
+                  {weakest.icon} {weakest.name}
+                </div>
+                <div style={{ fontSize: 12, color: '#ea580c', fontWeight: 500 }}>{weakest.score}점 — 집중 관리 필요</div>
+              </div>
+            </div>
+
+            {/* 5 subjects */}
+            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 16 }}>과목별 상세 성적 및 실천 체크리스트</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {subjectScores.map(sub => {
+                const { grade, color: gc, bg: gbg } = gradeFromScore(sub.score);
+                const isExp = expanded === sub.id;
+                const checkedCount = sub.actions.filter(a => actions[a.id]).length;
+                return (
+                  <div key={sub.id} style={{ border: `1.5px solid ${isExp ? C.primary : C.border}`, borderRadius: 14, overflow: 'hidden', transition: 'border-color 0.2s' }}>
+                    {/* subject row */}
+                    <div
+                      style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', cursor: 'pointer', background: isExp ? '#f0f7ff' : C.white }}
+                      onClick={() => setExpanded(isExp ? null : sub.id)}
+                    >
+                      <span style={{ fontSize: 22, flexShrink: 0 }}>{sub.icon}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                          <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{sub.name}</span>
+                          {checkedCount > 0 && (
+                            <span style={{ fontSize: 10, fontWeight: 700, color: C.primary, background: '#eff6ff', borderRadius: 10, padding: '2px 8px' }}>+{checkedCount}개 실천</span>
+                          )}
+                        </div>
+                        <div style={{ height: 7, background: '#f3f4f6', borderRadius: 4 }}>
+                          <div style={{ height: '100%', width: `${sub.score}%`, background: gc, borderRadius: 4, transition: 'width 0.4s ease' }} />
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 15, fontWeight: 800, color: C.text, width: 38, textAlign: 'right', flexShrink: 0 }}>{sub.score}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: gc, background: gbg, borderRadius: 6, padding: '3px 10px', flexShrink: 0, minWidth: 36, textAlign: 'center' }}>{grade}</span>
+                      <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, color: C.textSub, padding: 0, transform: isExp ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>⌄</button>
+                    </div>
+
+                    {/* expanded: comment + actions */}
+                    {isExp && (
+                      <div style={{ borderTop: `1px solid ${C.border}`, background: '#f9fafb' }}>
+                        <div style={{ padding: '14px 20px 10px', fontSize: 13, color: '#374151', lineHeight: 1.7, borderBottom: `1px dashed ${C.border}` }}>
+                          {sub.comment}
+                        </div>
+                        <div style={{ padding: '14px 20px 18px' }}>
+                          <div style={{ fontSize: 11, color: C.textSub, letterSpacing: 1, marginBottom: 12, fontWeight: 700 }}>실천하면 점수가 올라요</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            {sub.actions.map(action => {
+                              const checked = !!actions[action.id];
+                              return (
+                                <div
+                                  key={action.id}
+                                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: checked ? '#eff6ff' : C.white, borderRadius: 10, border: `1.5px solid ${checked ? C.primary : C.border}`, cursor: 'pointer', transition: 'all 0.15s' }}
+                                  onClick={() => toggleAction(action.id)}
+                                >
+                                  <div style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${checked ? C.primary : C.border}`, background: checked ? C.primary : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>
+                                    {checked && <span style={{ color: '#fff', fontSize: 11, fontWeight: 900 }}>✓</span>}
+                                  </div>
+                                  <span style={{ fontSize: 14, flex: 1, color: checked ? C.text : '#374151', fontWeight: checked ? 700 : 400 }}>{action.label}</span>
+                                  {action.gcProduct && (
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: C.primary, background: '#eff6ff', border: `1px solid ${C.primary}33`, borderRadius: 6, padding: '3px 8px', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                                      GC 추천 →
+                                    </span>
+                                  )}
+                                  <span style={{ fontSize: 11, fontWeight: 700, color: checked ? C.mildGreen : C.textSub, background: checked ? '#f0fdf4' : '#f3f4f6', borderRadius: 6, padding: '3px 8px', flexShrink: 0 }}>
+                                    +{action.bonus}점
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {sub.actions.some(a => a.gcProduct) && (
+                            <div style={{ marginTop: 12, padding: '10px 14px', background: '#eff6ff', borderRadius: 8, borderLeft: `3px solid ${C.primary}` }}>
+                              <div style={{ fontSize: 10, color: C.primary, fontWeight: 700, marginBottom: 4 }}>GC 지씨케어 추천 제품</div>
+                              {sub.actions.filter(a => a.gcProduct).map(a => (
+                                <div key={a.id} style={{ fontSize: 12, color: '#374151' }}>· {a.gcProduct!.name}</div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* GPA total */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, paddingTop: 24, borderTop: `2px solid ${C.primary}` }}>
+              <div>
+                <div style={{ fontSize: 12, color: C.textSub, marginBottom: 4 }}>나의 종합 GPA</div>
+                <div style={{ fontSize: 13, color: myGradeColor, fontWeight: 500 }}>
+                  {myGpa >= 80 ? '🎉 갓생 인증! 이 루틴 유지하세요.' : myGpa >= 60 ? '😐 절반의 갓생. 수면부터 챙기세요.' : '🚨 갓생 위기. 딱 하나만 고쳐볼까요?'}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: 48, fontWeight: 900, color: myGradeColor, letterSpacing: '-1px' }}>{myGpa}</span>
+                <span style={{ fontSize: 22, fontWeight: 700, color: myGradeColor, marginLeft: 4 }}>{myGrade}</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Footer strip */}
-        <div style={{ background: '#5b21b6', padding: '14px 24px', display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
-          <span style={{ fontFamily: MONO, fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>갓생 건강 성적표 · {data.week}</span>
-          <span style={{ fontFamily: MONO, fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>DATA: v1 · v3 · Claude AI</span>
+        {/* ── Footer ── */}
+        <div style={{ background: C.deepBlue, borderRadius: 14, padding: '16px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>갓생 건강 성적표 · {data.week}</span>
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>DATA: v1 · v3 · Claude AI</span>
         </div>
       </main>
     </div>
