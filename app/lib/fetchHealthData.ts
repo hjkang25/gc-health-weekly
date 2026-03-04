@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 export type Keyword = {
   rank: number;
   kw: string;
@@ -40,15 +42,6 @@ function parseCSV(text: string): Record<string, string>[] {
   });
 }
 
-const TOKEN = process.env.GITHUB_TOKEN;
-
-function authHeaders(raw = false): HeadersInit {
-  const h: Record<string, string> = {};
-  if (TOKEN) h['Authorization'] = `Bearer ${TOKEN}`;
-  if (raw) h['Accept'] = 'application/vnd.github.v3.raw';
-  return h;
-}
-
 async function fetchWithTimeout(url: string, options: RequestInit, ms = 8000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
@@ -59,31 +52,48 @@ async function fetchWithTimeout(url: string, options: RequestInit, ms = 8000): P
   }
 }
 
-// List files in a repo's /data folder via GitHub API
+// Step 1: List files in a repo's /data folder via GitHub API (token optional, only for rate limits)
 async function listDataFiles(repo: string): Promise<Array<{ name: string }>> {
-  const res = await fetchWithTimeout(
-    `https://api.github.com/repos/hjkang25/${repo}/contents/data`,
-    { headers: authHeaders(), cache: 'no-store' }
-  );
-  if (!res.ok) return [];
-  return res.json();
+  const url = `https://api.github.com/repos/hjkang25/${repo}/contents/data`;
+  console.log(`[listDataFiles] Fetching file list from GitHub API: ${url}`);
+  const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
+  const token = process.env.GITHUB_TOKEN;
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetchWithTimeout(url, { headers, cache: 'no-store' });
+  if (!res.ok) {
+    console.log(`[listDataFiles] Failed for ${repo}: ${res.status} ${res.statusText}`);
+    return [];
+  }
+  const files = await res.json();
+  console.log(`[listDataFiles] Found ${files.length} files in ${repo}/data`);
+  return files;
 }
 
-// Fetch the Nth most recent CSV matching a prefix (skip=0 → latest, skip=1 → previous)
+// Step 2: Get latest filename via API, then fetch CSV content via raw.githubusercontent.com (no auth needed)
 async function fetchCSV(repo: string, prefix: string, skip = 0): Promise<string> {
+  console.log(`[fetchCSV] repo=${repo} prefix="${prefix}" skip=${skip}`);
+
   const files = await listDataFiles(repo);
   const sorted = files
     .filter(f => f.name.startsWith(prefix) && f.name.endsWith('.csv'))
     .sort((a, b) => b.name.localeCompare(a.name));
   const target = sorted[skip];
-  if (!target) return '';
-  // Use contents API with raw accept header (works for private repos)
-  const res = await fetchWithTimeout(
-    `https://api.github.com/repos/hjkang25/${repo}/contents/data/${target.name}`,
-    { headers: authHeaders(true), cache: 'no-store' }
-  );
-  if (!res.ok) return '';
-  return res.text();
+  if (!target) {
+    console.log(`[fetchCSV] No matching file for prefix="${prefix}" skip=${skip}`);
+    return '';
+  }
+  console.log(`[fetchCSV] Selected file: ${target.name}`);
+
+  const rawUrl = `https://raw.githubusercontent.com/hjkang25/${repo}/main/data/${target.name}`;
+  console.log(`[fetchCSV] Fetching CSV content from: ${rawUrl}`);
+  const res = await fetchWithTimeout(rawUrl, { cache: 'no-store' });
+  if (!res.ok) {
+    console.log(`[fetchCSV] Failed to fetch ${rawUrl}: ${res.status} ${res.statusText}`);
+    return '';
+  }
+  const text = await res.text();
+  console.log(`[fetchCSV] Received ${text.length} chars for ${target.name}`);
+  return text;
 }
 
 function getWeekLabel(dateStr: string): string {
@@ -100,8 +110,8 @@ function getWeekLabel(dateStr: string): string {
 export async function fetchHealthData(): Promise<PageData> {
   const t0 = Date.now();
   console.log('[fetchHealthData] start', new Date().toISOString());
+  console.log('[fetchHealthData] Fetching all CSVs in parallel...');
 
-  // Fetch all CSVs in parallel
   const [top20LatestText, top20PrevText, relatedText, naverText] = await Promise.all([
     fetchCSV('health-trend-report-v3', 'top20_', 0),
     fetchCSV('health-trend-report-v3', 'top20_', 1),
@@ -109,6 +119,7 @@ export async function fetchHealthData(): Promise<PageData> {
     fetchCSV('health-trend-report', 'naver_trends_', 0),
   ]);
 
+  console.log('[fetchHealthData] All CSVs fetched, parsing...');
   const top20 = parseCSV(top20LatestText);
   const top20Prev = parseCSV(top20PrevText);
   const related = parseCSV(relatedText);
