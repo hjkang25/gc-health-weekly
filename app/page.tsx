@@ -11,7 +11,7 @@ const lifecycleGroups = [
     bgLight: "bg-emerald-50",
     borderColor: "border-emerald-200",
     textColor: "text-emerald-700",
-    available: false,
+    available: true,
     href: "/20s",
   },
   {
