@@ -44,6 +44,8 @@ export default function HealthReceipt({ data }: { data: PageData }) {
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [aiComment, setAiComment] = useState(STATIC.aiComment);
+  const [commentLoading, setCommentLoading] = useState(true);
 
   useEffect(() => {
     const link = document.createElement('link');
@@ -51,6 +53,21 @@ export default function HealthReceipt({ data }: { data: PageData }) {
     link.href = FONT_LINK;
     document.head.appendChild(link);
     return () => { document.head.removeChild(link); };
+  }, []);
+
+  useEffect(() => {
+    const kws = data.keywords.map(k => k.kw);
+    if (!kws.length) { setCommentLoading(false); return; }
+    fetch('/api/generate-comment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keywords: kws, target: '3040' }),
+    })
+      .then(r => r.json())
+      .then(d => { if (d.comment) setAiComment(d.comment); })
+      .catch(() => {})
+      .finally(() => setCommentLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const toggle = (kw: string) => setChecked(p => ({ ...p, [kw]: !p[kw] }));
@@ -78,7 +95,10 @@ export default function HealthReceipt({ data }: { data: PageData }) {
         </div>
         <div style={{ background: 'rgba(0,0,0,0.18)', padding: '16px 28px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
           <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: '#fff', background: C.accent, borderRadius: 3, padding: '3px 7px', flexShrink: 0, marginTop: 2, letterSpacing: 1 }}>EDITOR</span>
-          <p style={{ fontFamily: SANS, fontSize: 14, color: 'rgba(255,255,255,0.75)', lineHeight: 1.85, margin: 0 }}>{STATIC.aiComment}</p>
+          <p style={{ fontFamily: SANS, fontSize: 14, color: 'rgba(255,255,255,0.75)', lineHeight: 1.85, margin: 0, opacity: commentLoading ? 0.5 : 1, transition: 'opacity 0.4s' }}>
+            {aiComment}
+            {commentLoading && <span style={{ fontFamily: MONO, fontSize: 9, color: 'rgba(255,255,255,0.4)', marginLeft: 8 }}>AI 생성 중...</span>}
+          </p>
         </div>
       </header>
 
