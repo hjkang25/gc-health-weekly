@@ -11,7 +11,6 @@ const C = {
   brightGreen: '#97D700',
   red:         '#E4002B',
   mildBlue:    '#0072CE',
-  lightBlue:   '#00A9E0',
   mildGreen:   '#43B02A',
   bg:          '#f2f4f3',
   white:       '#ffffff',
@@ -59,35 +58,38 @@ export default function HealthReceipt({ data }: { data: PageData }) {
 
   useEffect(() => {
     const link = document.createElement('link');
-    link.rel = 'stylesheet';
+    link.rel  = 'stylesheet';
     link.href = 'https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap';
     document.head.appendChild(link);
 
     let p = 0;
     const iv = setInterval(() => {
       p += Math.random() * 18 + 6;
-      if (p >= 100) {
-        p = 100;
-        clearInterval(iv);
-        setTimeout(() => setLoaded(true), 250);
-      }
+      if (p >= 100) { p = 100; clearInterval(iv); }
       setProgress(Math.min(p, 100));
     }, 70);
 
-    return () => { clearInterval(iv); document.head.removeChild(link); };
+    const timer = setTimeout(() => setLoaded(true), 1900);
+
+    return () => {
+      clearInterval(iv);
+      clearTimeout(timer);
+      if (document.head.contains(link)) document.head.removeChild(link);
+    };
   }, []);
 
-  const toggle = (kw: string) => setChecked(p => ({ ...p, [kw]: !p[kw] }));
+  const toggle      = (kw: string) => setChecked(p => ({ ...p, [kw]: !p[kw] }));
   const checkedKws  = data.keywords.filter(k => checked[k.kw]);
   const myTotal     = checkedKws.reduce((s, k) => s - (11 - k.rank) * 1000, 0);
   const hasChecked  = checkedKws.length > 0;
+
   const kwSet       = new Set(data.keywords.map(k => k.kw));
   const isHighlight = (tag: string) =>
     [...kwSet].some(k => tag.includes(k.slice(0, 2)) || k.includes(tag.slice(0, 2)));
 
   const top4 = data.keywords.slice(0, 4);
 
-  /* ─── Loading screen ─── */
+  /* ── Loading screen ── */
   if (!loaded) {
     return (
       <div style={{ minHeight: '100vh', background: C.deepBlue, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: SANS }}>
@@ -102,89 +104,79 @@ export default function HealthReceipt({ data }: { data: PageData }) {
     );
   }
 
-  /* ─── Main render ─── */
+  /* ── Main render ── */
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, fontFamily: SANS, color: C.text, animation: 'gcFadeIn 0.4s ease' }}>
+    <div style={{ minHeight: '100vh', background: C.bg, fontFamily: SANS, color: C.text }}>
       <style>{`@keyframes gcFadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}`}</style>
 
-      {/* ── Nav ── */}
-      <nav style={{ background: C.deepBlue, position: 'sticky', top: 0, zIndex: 50, boxShadow: '0 2px 12px rgba(0,0,0,0.25)' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 54 }}>
+      {/* Nav */}
+      <nav style={{ background: C.white, position: 'sticky', top: 0, zIndex: 50, boxShadow: '0 1px 8px rgba(0,0,0,0.08)', borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 48px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 56 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 30, height: 30, background: C.primary, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 32, height: 32, background: C.primary, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <span style={{ color: '#fff', fontSize: 11, fontWeight: 900 }}>GC</span>
             </div>
-            <span style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>Health Weekly</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: C.deepBlue }}>Health Weekly</span>
           </div>
-          <div style={{ display: 'flex', gap: 28 }}>
+          <div style={{ display: 'flex', gap: 32 }}>
             {['주간리포트', '3040 직장인', '건강트렌드'].map(t => (
-              <span key={t} style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>{t}</span>
+              <span key={t} style={{ fontSize: 13, color: C.textSub, fontWeight: 500, cursor: 'pointer' }}>{t}</span>
             ))}
           </div>
-          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>{data.date}</span>
+          <span style={{ fontSize: 12, color: C.textSub }}>{data.date}</span>
         </div>
       </nav>
 
-      {/* ── Header ── */}
-      <header style={{ background: C.deepBlue }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '52px 32px 40px' }}>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: C.yellow, background: 'rgba(255,200,69,0.14)', borderRadius: 5, padding: '4px 12px', letterSpacing: 0.5 }}>3040 직장인</span>
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', background: 'rgba(255,255,255,0.07)', borderRadius: 5, padding: '4px 12px' }}>{data.week}</span>
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', background: 'rgba(255,255,255,0.07)', borderRadius: 5, padding: '4px 12px' }}>{data.vol}</span>
+      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 48px 80px', animation: 'gcFadeIn 0.4s ease' }}>
+
+        {/* Title + editor comment */}
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.primary, background: '#f0faf4', borderRadius: 5, padding: '4px 12px' }}>3040 직장인</span>
+            <span style={{ fontSize: 11, color: C.textSub, background: '#f3f4f6', borderRadius: 5, padding: '4px 12px' }}>{data.week}</span>
+            <span style={{ fontSize: 11, color: C.textSub, background: '#f3f4f6', borderRadius: 5, padding: '4px 12px' }}>{data.vol}</span>
           </div>
-          <h1 style={{ fontSize: 'clamp(44px, 6vw, 76px)', fontWeight: 900, color: '#fff', margin: '0 0 8px', lineHeight: 1.05, letterSpacing: '-1.5px' }}>
-            건강 영수증
+          <h1 style={{ fontSize: 'clamp(40px, 5vw, 64px)', fontWeight: 900, color: C.deepBlue, margin: '0 0 8px', lineHeight: 1.1, letterSpacing: '-1px' }}>
+            건강 <span style={{ color: C.primary }}>영수증</span>
           </h1>
-          <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.4)', margin: '0 0 36px' }}>
-            이번 주 당신의 몸은 적자입니까?
-          </p>
-          <div style={{ background: 'rgba(255,255,255,0.06)', borderLeft: `4px solid ${C.primary}`, borderRadius: '0 14px 14px 0', padding: '18px 22px', maxWidth: 680 }}>
+          <p style={{ fontSize: 16, color: C.textSub, margin: '0 0 24px' }}>이번 주 당신의 몸은 적자입니까?</p>
+          <div style={{ background: C.white, borderLeft: `4px solid ${C.primary}`, borderRadius: '0 14px 14px 0', padding: '18px 22px', maxWidth: 680, boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
             <div style={{ fontSize: 10, color: C.brightGreen, letterSpacing: 3, marginBottom: 10, fontWeight: 700 }}>EDITOR</div>
-            <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.78)', lineHeight: 1.95, margin: 0 }}>{AI_COMMENT}</p>
+            <p style={{ fontSize: 15, color: C.text, lineHeight: 1.95, margin: 0 }}>{AI_COMMENT}</p>
           </div>
         </div>
-      </header>
 
-      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 32px 80px' }}>
-
-        {/* ── 3 stat cards ── */}
+        {/* 3 stat cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 20 }}>
           {[
-            { label: '이번 주 실검 1위', value: data.topKeyword || '기침 가슴통증', sub: '3040 직장인 검색', accent: C.primary },
-            { label: '병원 키워드 빈도', value: '+53%', sub: '뉴스 급등', accent: C.mildBlue },
-            {
-              label: '네이버 건강 관심 1위',
-              value: `${data.naverCategories[0]?.ratio ?? 42.8}%`,
-              sub: data.naverCategories[0]?.label ?? '건강검진',
-              accent: C.mildGreen,
-            },
+            { label: '이번 주 실검 1위',  value: data.keywords[0]?.kw || data.topKeyword, sub: '3040 직장인 검색', bg: C.primary,  dark: false },
+            { label: '네이버 관심 1위',   value: data.naverCategories[0]?.label ?? '건강검진', sub: `${data.naverCategories[0]?.ratio ?? 0}% 관심도`, bg: C.deepBlue, dark: false },
+            { label: '병원 키워드 빈도',  value: '+53%',                                  sub: '뉴스 급등',      bg: C.yellow,   dark: true  },
           ].map((card, i) => (
-            <div key={i} style={{ background: C.white, borderRadius: 16, padding: '28px 28px 22px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
-              <div style={{ fontSize: 11, color: C.textSub, letterSpacing: 0.5, marginBottom: 14, fontWeight: 500 }}>{card.label}</div>
-              <div style={{ fontSize: 34, fontWeight: 900, color: card.accent, lineHeight: 1.1, marginBottom: 8 }}>{card.value}</div>
-              <div style={{ fontSize: 12, color: C.textSub }}>{card.sub}</div>
+            <div key={i} style={{ background: card.bg, borderRadius: 16, padding: '28px 28px 22px' }}>
+              <div style={{ fontSize: 11, color: card.dark ? C.deepBlue : 'rgba(255,255,255,0.6)', letterSpacing: 0.5, marginBottom: 12, fontWeight: 500 }}>{card.label}</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: card.dark ? C.deepBlue : '#fff', lineHeight: 1.1, marginBottom: 8 }}>{card.value}</div>
+              <div style={{ fontSize: 12, color: card.dark ? C.deepBlue : 'rgba(255,255,255,0.55)' }}>{card.sub}</div>
             </div>
           ))}
         </div>
 
-        {/* ── 2-col: TOP8 + right panel ── */}
+        {/* 2-col: TOP8 + right panel */}
         <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 16, marginBottom: 16 }}>
 
           {/* LEFT: TOP8 */}
           <div style={{ background: C.white, borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
             <div style={{ padding: '24px 28px 16px', borderBottom: `2px solid ${C.primary}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: 16, fontWeight: 800 }}>이번 주 검색 TOP8</span>
-              <span style={{ fontSize: 10, color: C.textSub, letterSpacing: 1 }}>v3 실시간</span>
+              <span style={{ fontSize: 10, color: C.textSub, letterSpacing: 1 }}>실시간</span>
             </div>
-            {/* column headings */}
             <div style={{ display: 'grid', gridTemplateColumns: '38px 28px 1fr 80px 84px 28px', gap: 8, padding: '9px 28px', background: '#f9fafb', borderBottom: `1px solid ${C.border}` }}>
               {['', 'NO', '키워드', '트렌드', '청구액', ''].map((h, i) => (
                 <span key={i} style={{ fontSize: 10, color: C.textSub, fontWeight: 700, textAlign: i >= 3 ? 'right' : 'left' }}>{h}</span>
               ))}
             </div>
             {data.keywords.map(item => {
-              const tr    = TREND[item.trend];
+              const tr    = TREND[item.trend] ?? TREND.same;
               const isExp = expanded === item.kw;
               return (
                 <div key={item.kw} style={{ borderBottom: `1px solid ${C.border}` }}>
@@ -230,7 +222,7 @@ export default function HealthReceipt({ data }: { data: PageData }) {
             <div style={{ background: C.white, borderRadius: 16, padding: '24px 28px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
                 <span style={{ fontSize: 16, fontWeight: 800 }}>건강 관심사</span>
-                <span style={{ fontSize: 10, color: C.textSub, letterSpacing: 1 }}>v1 네이버</span>
+                <span style={{ fontSize: 10, color: C.textSub, letterSpacing: 1 }}>네이버</span>
               </div>
               {data.naverCategories.map((c, i) => (
                 <div key={c.label} style={{ marginBottom: 16 }}>
@@ -258,7 +250,7 @@ export default function HealthReceipt({ data }: { data: PageData }) {
           </div>
         </div>
 
-        {/* ── Tags ── */}
+        {/* Tags */}
         <div style={{ background: C.white, borderRadius: 16, padding: '28px', marginBottom: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
           <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 6 }}>3040이 늘 겪는 것들</div>
           <p style={{ fontSize: 13, color: C.textSub, lineHeight: 1.6, margin: '0 0 18px' }}>
@@ -276,9 +268,8 @@ export default function HealthReceipt({ data }: { data: PageData }) {
           </div>
         </div>
 
-        {/* ── Receipt section ── */}
+        {/* Receipt section */}
         <div style={{ background: C.white, borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
-          {/* receipt header bar */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', borderBottom: `2px solid ${C.primary}` }}>
             <div style={{ padding: '22px 28px' }}>
               <div style={{ fontSize: 10, color: C.textSub, letterSpacing: 2, marginBottom: 6 }}>건강 영수증 · HEALTH RECEIPT</div>
@@ -290,7 +281,6 @@ export default function HealthReceipt({ data }: { data: PageData }) {
             </div>
           </div>
 
-          {/* 2-col body */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
 
             {/* LEFT: my receipt */}
@@ -367,7 +357,7 @@ export default function HealthReceipt({ data }: { data: PageData }) {
           </div>
         </div>
 
-        {/* ── Footer ── */}
+        {/* Footer */}
         <div style={{ background: C.deepBlue, borderRadius: 14, padding: '16px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
           <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>GC HEALTH WEEKLY · {data.week}</span>
           <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>DATA: v1 · v3 · Claude AI</span>
