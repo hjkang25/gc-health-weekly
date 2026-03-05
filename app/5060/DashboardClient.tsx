@@ -25,29 +25,74 @@ const TAGS_5060 = [
   '수면 장애', '관절 통증', '만성 피로',
 ];
 
-const AI_COMMENT =
-  '이번 주 5060 검색 1위는 혈압·혈당 관련 키워드입니다. 계절 변화와 인사이동 스트레스가 겹치는 시기, 만성질환 적신호가 동시에 올라왔습니다. 지금이 리밸런싱의 골든타임입니다.';
-
 const EXPERT_COMMENT =
   '근감소와 혈당 불안정은 서로를 악화시키는 악순환 구조입니다. 5060대에서 이 두 지표가 동반 악화되면 심혈관 위험과 인지 저하가 급속도로 진행됩니다. 지금 바로 개입이 필요합니다.';
 
 const TREND: Record<string, { label: string; color: string; bg: string }> = {
-  up:   { label: '▲ 급등', color: C.red,      bg: '#fce8eb' },
-  new:  { label: 'NEW',    color: C.mildG,     bg: '#edfce8' },
-  down: { label: '▼',      color: '#0072CE',   bg: '#e8f1fc' },
-  same: { label: '—',      color: '#9ca3af',   bg: '#f3f4f6' },
+  up:   { label: '▲ 급등', color: C.red,    bg: '#fce8eb' },
+  new:  { label: 'NEW',    color: C.mildG,   bg: '#edfce8' },
+  down: { label: '▼',      color: '#0072CE', bg: '#e8f1fc' },
+  same: { label: '—',      color: '#9ca3af', bg: '#f3f4f6' },
 };
 
-const SAFE_ASSETS = [
-  { name: '근육량',  sub: '근력 유지의 기초',   score: 55, icon: '💪' },
-  { name: '골밀도',  sub: '골절 예방 핵심',      score: 62, icon: '🦴' },
-  { name: '인지기능', sub: '뇌 건강 자산',        score: 58, icon: '🧠' },
-];
+interface AssetConfig {
+  id: string;
+  name: string;
+  sub: string;
+  icon: string;
+  type: 'safe' | 'risk';
+  unit: string;
+  placeholder: string;
+  kwTerms: string[];
+  top3Score: number;
+  top8Score: number;
+  notFoundScore: number;
+  valueToScore: (val: number) => number;
+}
 
-const RISK_ASSETS = [
-  { name: '혈당',    sub: '당뇨·대사 위험',        score: 42, icon: '🩸' },
-  { name: '혈압',    sub: '심혈관 위험',            score: 38, icon: '💗' },
-  { name: '내장지방', sub: '복합 만성질환 트리거',  score: 35, icon: '⚠️' },
+const ASSET_CONFIGS: AssetConfig[] = [
+  {
+    id: 'muscle', name: '근육량', sub: '근력 유지의 기초', icon: '💪', type: 'safe',
+    unit: 'kg', placeholder: '예: 22.5 (kg)',
+    kwTerms: ['근감소증'],
+    top3Score: 38, top8Score: 45, notFoundScore: 55,
+    valueToScore: v => v >= 25 ? 80 : v >= 20 ? 65 : v >= 15 ? 50 : 35,
+  },
+  {
+    id: 'bone', name: '골밀도', sub: '골절 예방 핵심', icon: '🦴', type: 'safe',
+    unit: '', placeholder: '예: -0.8 (T-score)',
+    kwTerms: ['골다공증'],
+    top3Score: 42, top8Score: 52, notFoundScore: 60,
+    valueToScore: v => v >= 0 ? 80 : v >= -1 ? 65 : v >= -2 ? 50 : 35,
+  },
+  {
+    id: 'cog', name: '인지기능', sub: '뇌 건강 자산', icon: '🧠', type: 'safe',
+    unit: '점', placeholder: '예: 70 (자가평가 1-100)',
+    kwTerms: ['치매'],
+    top3Score: 55, top8Score: 65, notFoundScore: 70,
+    valueToScore: v => v >= 80 ? 85 : v >= 60 ? 70 : v >= 40 ? 55 : 35,
+  },
+  {
+    id: 'bp', name: '혈압', sub: '심혈관 위험', icon: '💗', type: 'risk',
+    unit: 'mmHg', placeholder: '예: 130 (수축기)',
+    kwTerms: ['혈압'],
+    top3Score: 75, top8Score: 65, notFoundScore: 50,
+    valueToScore: v => v >= 160 ? 85 : v >= 140 ? 72 : v >= 130 ? 58 : v >= 120 ? 42 : 28,
+  },
+  {
+    id: 'bs', name: '혈당', sub: '당뇨·대사 위험', icon: '🩸', type: 'risk',
+    unit: 'mg/dL', placeholder: '예: 110 (공복혈당)',
+    kwTerms: ['당뇨', '혈당'],
+    top3Score: 78, top8Score: 68, notFoundScore: 55,
+    valueToScore: v => v >= 200 ? 85 : v >= 126 ? 72 : v >= 100 ? 55 : 32,
+  },
+  {
+    id: 'vf', name: '내장지방', sub: '복합 만성질환 트리거', icon: '⚠️', type: 'risk',
+    unit: '레벨', placeholder: '예: 10 (레벨 1-20)',
+    kwTerms: ['비만', '지방'],
+    top3Score: 65, top8Score: 65, notFoundScore: 55,
+    valueToScore: v => v >= 15 ? 85 : v >= 10 ? 70 : v >= 7 ? 55 : 35,
+  },
 ];
 
 interface RebalanceAction {
@@ -60,14 +105,14 @@ interface RebalanceItem {
   id: string;
   icon: string;
   name: string;
-  base: number;
+  assetId: string;
   comment: string;
   actions: RebalanceAction[];
 }
 
 const REBALANCE_ITEMS: RebalanceItem[] = [
   {
-    id: 'muscle', icon: '💪', name: '근육량 리밸런싱', base: 55,
+    id: 'muscle', icon: '💪', name: '근육량 리밸런싱', assetId: 'muscle',
     comment: '근감소증은 5060대 건강 손실의 가장 큰 원인입니다. 저항운동과 단백질 섭취가 핵심입니다.',
     actions: [
       { id: 'mu_1', label: '주 3회 저항운동 20분',      bonus: 10 },
@@ -76,7 +121,7 @@ const REBALANCE_ITEMS: RebalanceItem[] = [
     ],
   },
   {
-    id: 'blood', icon: '🩸', name: '혈당 리밸런싱', base: 48,
+    id: 'blood', icon: '🩸', name: '혈당 리밸런싱', assetId: 'bs',
     comment: '식후 혈당 스파이크가 인지 저하와 심혈관 질환의 근본 원인입니다. 식후 걷기가 가장 강력한 처방입니다.',
     actions: [
       { id: 'bl_1', label: '식후 10분 걷기 습관화',   bonus: 10 },
@@ -85,29 +130,41 @@ const REBALANCE_ITEMS: RebalanceItem[] = [
     ],
   },
   {
-    id: 'cog', icon: '🧠', name: '인지기능 리밸런싱', base: 52,
+    id: 'cog', icon: '🧠', name: '인지기능 리밸런싱', assetId: 'cog',
     comment: '인지 저하 예방은 50대부터 시작해야 합니다. 두뇌 자극과 오메가3가 필수입니다.',
     actions: [
-      { id: 'cg_1', label: '하루 30분 독서·학습',        bonus: 10 },
-      { id: 'cg_2', label: '오메가3·비타민D 복용',       bonus: 8 },
-      { id: 'cg_3', label: '브레인케어 영양제 활용',     bonus: 6, gcProduct: 'GC녹십자 브레인케어 DHA' },
+      { id: 'cg_1', label: '하루 30분 독서·학습',    bonus: 10 },
+      { id: 'cg_2', label: '오메가3·비타민D 복용',   bonus: 8 },
+      { id: 'cg_3', label: '브레인케어 영양제 활용', bonus: 6, gcProduct: 'GC녹십자 브레인케어 DHA' },
     ],
   },
 ];
 
+function computeKwScore(asset: AssetConfig, keywords: { rank: number; kw: string }[]): number {
+  for (const kw of keywords) {
+    if (kw.rank > 8) continue;
+    if (asset.kwTerms.some(term => kw.kw.includes(term))) {
+      return kw.rank <= 3 ? asset.top3Score : asset.top8Score;
+    }
+  }
+  return asset.notFoundScore;
+}
+
 function gradeFromScore(s: number) {
-  if (s >= 80) return { grade: 'A', color: C.mildG,     bg: '#f0fdf4' };
-  if (s >= 65) return { grade: 'B', color: '#0072CE',   bg: '#eff6ff' };
-  if (s >= 50) return { grade: 'C', color: C.primary,   bg: '#fefce8' };
-  return              { grade: 'D', color: C.red,        bg: '#fef2f2' };
+  if (s >= 80) return { grade: 'A', color: C.mildG,   bg: '#f0fdf4' };
+  if (s >= 65) return { grade: 'B', color: '#0072CE', bg: '#eff6ff' };
+  if (s >= 50) return { grade: 'C', color: C.primary, bg: '#fefce8' };
+  return              { grade: 'D', color: C.red,     bg: '#fef2f2' };
 }
 
 export default function DashboardClient({ data }: { data: PageData }) {
-  const [loaded,    setLoaded]    = useState(false);
-  const [progress,  setProgress]  = useState(0);
-  const [kwChecked, setKwChecked] = useState<Record<string, boolean>>({});
-  const [expanded,  setExpanded]  = useState<string | null>(null);
-  const [actions,   setActions]   = useState<Record<string, boolean>>({});
+  const [loaded,       setLoaded]       = useState(false);
+  const [progress,     setProgress]     = useState(0);
+  const [kwChecked,    setKwChecked]    = useState<Record<string, boolean>>({});
+  const [expanded,     setExpanded]     = useState<string | null>(null);
+  const [actions,      setActions]      = useState<Record<string, boolean>>({});
+  const [userInputs,   setUserInputs]   = useState<Record<string, string>>({});
+  const [editingAsset, setEditingAsset] = useState<string | null>(null);
 
   useEffect(() => {
     const link = document.createElement('link');
@@ -134,23 +191,48 @@ export default function DashboardClient({ data }: { data: PageData }) {
   const toggleKw     = (kw: string) => setKwChecked(p => ({ ...p, [kw]: !p[kw] }));
   const toggleAction = (id: string) => setActions(p => ({ ...p, [id]: !p[id] }));
 
-  const rebalanceScores = useMemo(() =>
-    REBALANCE_ITEMS.map(item => {
-      const bonus = item.actions
-        .filter(a => actions[a.id])
-        .reduce((s, a) => s + a.bonus, 0);
-      return { ...item, score: Math.min(100, item.base + bonus) };
+  // Keyword-based scores + user input override
+  const assetScores = useMemo(() =>
+    ASSET_CONFIGS.map(asset => {
+      const kwScore  = computeKwScore(asset, data.keywords);
+      const rawInput = userInputs[asset.id]?.trim() ?? '';
+      const val      = parseFloat(rawInput);
+      const hasUserInput = rawInput !== '' && !isNaN(val);
+      const score    = hasUserInput ? asset.valueToScore(val) : kwScore;
+      return { ...asset, kwScore, score, hasUserInput };
     }),
-    [actions]
+    [data.keywords, userInputs]
   );
 
-  const portfolioScore = Math.round(
-    rebalanceScores.reduce((s, i) => s + i.score, 0) / REBALANCE_ITEMS.length
+  // Rebalance base derived from live asset scores
+  const rebalanceScores = useMemo(() =>
+    REBALANCE_ITEMS.map(item => {
+      const asset = assetScores.find(a => a.id === item.assetId)!;
+      const base  = asset.type === 'safe' ? asset.score : 100 - asset.score;
+      const bonus = item.actions.filter(a => actions[a.id]).reduce((s, a) => s + a.bonus, 0);
+      return { ...item, base, score: Math.min(100, base + bonus) };
+    }),
+    [assetScores, actions]
   );
+
+  // Portfolio score: all 6 asset health scores averaged (rebalance items use boosted score)
+  const portfolioScore = useMemo(() => {
+    const healthScores = assetScores.map(asset => {
+      const rebalItem = rebalanceScores.find(r => r.assetId === asset.id);
+      if (rebalItem) return rebalItem.score;
+      return asset.type === 'safe' ? asset.score : 100 - asset.score;
+    });
+    return Math.round(healthScores.reduce((s, h) => s + h, 0) / healthScores.length);
+  }, [assetScores, rebalanceScores]);
 
   const kwSet       = new Set(data.keywords.map(k => k.kw));
   const isHighlight = (tag: string) =>
     [...kwSet].some(k => tag.includes(k.slice(0, 2)) || k.includes(tag.slice(0, 2)));
+
+  const safeAssets = assetScores.filter(a => a.type === 'safe');
+  const riskAssets = assetScores.filter(a => a.type === 'risk');
+
+  const aiComment = `이번 주 5060 검색 1위는 ${data.keywords[0]?.kw ?? '—'}입니다. ${data.keywords[1]?.kw ?? '—'}과 함께 방어적 투자 패턴이 뚜렷하게 나타나고 있습니다. 지금이 리밸런싱의 골든타임입니다.`;
 
   /* ── Loading screen ── */
   if (!loaded) {
@@ -167,7 +249,7 @@ export default function DashboardClient({ data }: { data: PageData }) {
     );
   }
 
-  const { grade: pfGrade, color: pfColor, bg: pfBg } = gradeFromScore(portfolioScore);
+  const { grade: pfGrade, color: pfColor } = gradeFromScore(portfolioScore);
 
   /* ── Main render ── */
   return (
@@ -208,16 +290,16 @@ export default function DashboardClient({ data }: { data: PageData }) {
           <p style={{ fontSize: 16, color: C.textSub, margin: '0 0 24px' }}>5060 액티브 시니어를 위한 건강 자산 관리 리포트</p>
           <div style={{ background: C.white, borderLeft: `4px solid ${C.primary}`, borderRadius: '0 14px 14px 0', padding: '18px 22px', maxWidth: 680, boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
             <div style={{ fontSize: 10, color: C.primary, letterSpacing: 3, marginBottom: 10, fontWeight: 700 }}>EDITOR</div>
-            <p style={{ fontSize: 15, color: C.text, lineHeight: 1.95, margin: 0 }}>{AI_COMMENT}</p>
+            <p style={{ fontSize: 15, color: C.text, lineHeight: 1.95, margin: 0 }}>{aiComment}</p>
           </div>
         </div>
 
         {/* 3 stat cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 20 }}>
           {[
-            { label: '이번 주 실검 1위',  value: data.topKeyword || data.keywords[0]?.kw, sub: '5060 건강 검색 TOP', bg: `linear-gradient(135deg, ${C.primary}, ${C.secondary})`, dark: false },
+            { label: '이번 주 실검 1위',     value: data.topKeyword || data.keywords[0]?.kw, sub: '5060 건강 검색 TOP', bg: `linear-gradient(135deg, ${C.primary}, ${C.secondary})`, dark: false },
             { label: '네이버 건강 관심 1위', value: `${data.naverCategories[0]?.ratio ?? 0}%`, sub: data.naverCategories[0]?.label ?? '건강검진', bg: C.deepBlue, dark: false },
-            { label: '5060 평균 수면',    value: '5.4h', sub: '권장치 -1.6h', bg: C.bright, dark: true },
+            { label: '5060 평균 수면',        value: '5.4h', sub: '권장치 -1.6h', bg: C.bright, dark: true },
           ].map((card, i) => (
             <div key={i} style={{ background: card.bg, borderRadius: 16, padding: '28px 28px 22px' }}>
               <div style={{ fontSize: 11, color: card.dark ? C.deepBlue : 'rgba(255,255,255,0.65)', letterSpacing: 0.5, marginBottom: 12, fontWeight: 500 }}>{card.label}</div>
@@ -362,17 +444,47 @@ export default function DashboardClient({ data }: { data: PageData }) {
                   <span style={{ fontSize: 11, fontWeight: 800, color: C.mildG, background: '#dcfce7', borderRadius: 6, padding: '4px 10px', letterSpacing: 1 }}>SAFE ASSETS</span>
                   <span style={{ fontSize: 11, color: C.textSub }}>건강 자산</span>
                 </div>
-                {SAFE_ASSETS.map(asset => (
-                  <div key={asset.name} style={{ marginBottom: 14 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{asset.icon} {asset.name}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: 11, color: C.textSub }}>{asset.sub}</span>
-                        <span style={{ fontSize: 13, fontWeight: 800, color: C.mildG }}>{asset.score}</span>
+                {safeAssets.map(asset => (
+                  <div key={asset.id} style={{ marginBottom: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{asset.icon} {asset.name}</div>
+                        <div style={{ fontSize: 11, color: C.textSub, marginTop: 2 }}>{asset.sub}</div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        {editingAsset === asset.id ? (
+                          <input
+                            autoFocus
+                            type="text"
+                            value={userInputs[asset.id] ?? ''}
+                            placeholder={asset.placeholder}
+                            onChange={e => setUserInputs(p => ({ ...p, [asset.id]: e.target.value }))}
+                            onBlur={() => setEditingAsset(null)}
+                            onKeyDown={e => { if (e.key === 'Enter') setEditingAsset(null); }}
+                            style={{ width: 120, fontSize: 11, padding: '3px 8px', border: `1.5px solid ${C.mildG}`, borderRadius: 6, outline: 'none', fontFamily: SANS }}
+                          />
+                        ) : asset.hasUserInput ? (
+                          <span
+                            onClick={() => setEditingAsset(asset.id)}
+                            title="클릭해서 수정"
+                            style={{ fontSize: 10, fontWeight: 700, color: C.mildG, background: '#f0fdf4', border: `1px solid ${C.mildG}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          >
+                            실측값 {userInputs[asset.id]}{asset.unit}
+                          </span>
+                        ) : (
+                          <span
+                            onClick={() => setEditingAsset(asset.id)}
+                            title="실측값 입력"
+                            style={{ fontSize: 10, color: C.textSub, background: '#f3f4f6', border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          >
+                            추정값
+                          </span>
+                        )}
+                        <span style={{ fontSize: 13, fontWeight: 800, color: C.mildG, minWidth: 24, textAlign: 'right' }}>{asset.score}</span>
                       </div>
                     </div>
-                    <div style={{ height: 6, background: '#dcfce7', borderRadius: 3 }}>
-                      <div style={{ height: '100%', width: `${asset.score}%`, background: C.mildG, borderRadius: 3 }} />
+                    <div style={{ height: 6, background: '#dcfce7', borderRadius: 3, marginTop: 8 }}>
+                      <div style={{ height: '100%', width: `${asset.score}%`, background: C.mildG, borderRadius: 3, transition: 'width 0.4s ease' }} />
                     </div>
                   </div>
                 ))}
@@ -384,17 +496,47 @@ export default function DashboardClient({ data }: { data: PageData }) {
                   <span style={{ fontSize: 11, fontWeight: 800, color: C.red, background: '#fee2e2', borderRadius: 6, padding: '4px 10px', letterSpacing: 1 }}>RISK ASSETS</span>
                   <span style={{ fontSize: 11, color: C.textSub }}>리스크 자산</span>
                 </div>
-                {RISK_ASSETS.map(asset => (
-                  <div key={asset.name} style={{ marginBottom: 14 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{asset.icon} {asset.name}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: 11, color: C.textSub }}>{asset.sub}</span>
-                        <span style={{ fontSize: 13, fontWeight: 800, color: C.red }}>{asset.score}</span>
+                {riskAssets.map(asset => (
+                  <div key={asset.id} style={{ marginBottom: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{asset.icon} {asset.name}</div>
+                        <div style={{ fontSize: 11, color: C.textSub, marginTop: 2 }}>{asset.sub}</div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        {editingAsset === asset.id ? (
+                          <input
+                            autoFocus
+                            type="text"
+                            value={userInputs[asset.id] ?? ''}
+                            placeholder={asset.placeholder}
+                            onChange={e => setUserInputs(p => ({ ...p, [asset.id]: e.target.value }))}
+                            onBlur={() => setEditingAsset(null)}
+                            onKeyDown={e => { if (e.key === 'Enter') setEditingAsset(null); }}
+                            style={{ width: 120, fontSize: 11, padding: '3px 8px', border: `1.5px solid ${C.red}`, borderRadius: 6, outline: 'none', fontFamily: SANS }}
+                          />
+                        ) : asset.hasUserInput ? (
+                          <span
+                            onClick={() => setEditingAsset(asset.id)}
+                            title="클릭해서 수정"
+                            style={{ fontSize: 10, fontWeight: 700, color: C.red, background: '#fff0f0', border: `1px solid ${C.red}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          >
+                            실측값 {userInputs[asset.id]}{asset.unit}
+                          </span>
+                        ) : (
+                          <span
+                            onClick={() => setEditingAsset(asset.id)}
+                            title="실측값 입력"
+                            style={{ fontSize: 10, color: C.textSub, background: '#f3f4f6', border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          >
+                            추정값
+                          </span>
+                        )}
+                        <span style={{ fontSize: 13, fontWeight: 800, color: C.red, minWidth: 24, textAlign: 'right' }}>{asset.score}</span>
                       </div>
                     </div>
-                    <div style={{ height: 6, background: '#fee2e2', borderRadius: 3 }}>
-                      <div style={{ height: '100%', width: `${asset.score}%`, background: C.red, borderRadius: 3 }} />
+                    <div style={{ height: 6, background: '#fee2e2', borderRadius: 3, marginTop: 8 }}>
+                      <div style={{ height: '100%', width: `${asset.score}%`, background: C.red, borderRadius: 3, transition: 'width 0.4s ease' }} />
                     </div>
                   </div>
                 ))}
