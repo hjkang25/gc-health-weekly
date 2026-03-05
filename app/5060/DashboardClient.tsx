@@ -215,8 +215,8 @@ export default function DashboardClient({ data }: { data: PageData }) {
         {/* 3 stat cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 20 }}>
           {[
-            { label: '이번 주 실검 1위',  value: data.keywords[0]?.kw || data.topKeyword, sub: '5060 건강 검색 TOP', bg: `linear-gradient(135deg, ${C.primary}, ${C.secondary})`, dark: false },
-            { label: '네이버 관심 1위',   value: data.naverCategories[0]?.label ?? '건강검진', sub: `${data.naverCategories[0]?.ratio ?? 0}% 관심도`, bg: C.deepBlue, dark: false },
+            { label: '이번 주 실검 1위',  value: data.topKeyword || data.keywords[0]?.kw, sub: '5060 건강 검색 TOP', bg: `linear-gradient(135deg, ${C.primary}, ${C.secondary})`, dark: false },
+            { label: '네이버 건강 관심 1위', value: `${data.naverCategories[0]?.ratio ?? 0}%`, sub: data.naverCategories[0]?.label ?? '건강검진', bg: C.deepBlue, dark: false },
             { label: '5060 평균 수면',    value: '5.4h', sub: '권장치 -1.6h', bg: C.bright, dark: true },
           ].map((card, i) => (
             <div key={i} style={{ background: card.bg, borderRadius: 16, padding: '28px 28px 22px' }}>
@@ -405,7 +405,7 @@ export default function DashboardClient({ data }: { data: PageData }) {
             <div style={{ background: C.deepBlue, borderRadius: 14, padding: '20px 24px', marginBottom: 24 }}>
               <div style={{ fontSize: 10, color: C.secondary, letterSpacing: 3, marginBottom: 12, fontWeight: 700 }}>PORTFOLIO INSIGHT</div>
               <p style={{ fontSize: 14, color: C.bright, lineHeight: 1.9, margin: 0, fontWeight: 500 }}>
-                이번 주 5060 데이터에서 혈당·혈압 관련 검색이 동반 급등했습니다. 근감소와 혈당 불안정은 서로를 악화시킵니다. 지금 당장 <strong style={{ color: '#fff' }}>단백질 섭취</strong>와 <strong style={{ color: '#fff' }}>식후 걷기</strong> 두 가지만 실천하세요.
+                이번 주 5060 데이터에서 <strong style={{ color: '#fff' }}>{data.keywords.slice(0, 2).map(k => k.kw).join('·')}</strong> 관련 검색이 동반 급등했습니다. 근감소와 혈당 불안정은 서로를 악화시킵니다. 지금 당장 <strong style={{ color: '#fff' }}>단백질 섭취</strong>와 <strong style={{ color: '#fff' }}>식후 걷기</strong> 두 가지만 실천하세요.
               </p>
             </div>
 
